@@ -6,6 +6,7 @@
 #include <curand_kernel.h>
 #include <algorithm>
 #include <cstring>
+#include <climits>
 
 // ============================================================================
 // Device RNG (curand)
@@ -106,10 +107,11 @@ __global__ void kernelMutate(
     int pop_size,
     int n_items,
     float mutation_rate,
+    int start_idx,  // Empezar desde este índice (evitar mutar elites)
     curandState* states
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= pop_size) return;
+    if (idx < start_idx || idx >= pop_size) return;
     
     curandState localState = states[idx];
     
@@ -125,30 +127,7 @@ __global__ void kernelMutate(
 }
 
 // ============================================================================
-// Kernel: Copiar elitismo
-// ============================================================================
-
-__global__ void kernelCopyElite(
-    int* d_new_genes,
-    const int* d_genes,
-    const int* d_elite_indices,
-    int elitism_count,
-    int n_items
-) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= elitism_count) return;
-    
-    int src_idx = d_elite_indices[idx];
-    int* dst = d_new_genes + idx * n_items;
-    const int* src = d_genes + src_idx * n_items;
-    
-    for (int i = 0; i < n_items; i++) {
-        dst[i] = src[i];
-    }
-}
-
-// ============================================================================
-// Wrapper: Evaluación fitness (dispatch basic/optimized)
+// Wrapper: Evaluación fitness
 // ============================================================================
 
 static void evaluatePopulation(
@@ -157,7 +136,6 @@ static void evaluatePopulation(
     const int* d_genes,
     const Instance& inst,
     const GAConfig& config,
-    // Device data
     const int* d_item_valores, const int* d_item_pesos,
     const int* d_item_volumenes, const int* d_item_categorias,
     const int* d_cat_minimos, const int* d_cat_maximos,
@@ -191,22 +169,83 @@ static void evaluatePopulation(
 }
 
 // ============================================================================
-// AG CUDA Genérico (used by both basic and optimized)
+// GPU Initialization: Greedy + semi-random + random (same as CPU)
+// ============================================================================
+
+static void initializePopulationGPU(
+    int* d_genes, int pop_size, int n_items,
+    const Instance& inst, const GAConfig& config
+) {
+    // Build greedy order on CPU
+    std::vector<int> sorted_ids(n_items);
+    for (int i = 0; i < n_items; i++) sorted_ids[i] = i;
+    std::sort(sorted_ids.begin(), sorted_ids.end(), [&](int a, int b) {
+        return (float)inst.items[a].valor / inst.items[a].peso > 
+               (float)inst.items[b].valor / inst.items[b].peso;
+    });
+    
+    // Calculate max items by weight
+    int max_items = 0, accum = 0;
+    for (int i = 0; i < n_items; i++) {
+        if (accum + inst.items[sorted_ids[i]].peso <= inst.capacidad_peso) {
+            accum += inst.items[sorted_ids[i]].peso;
+            max_items++;
+        }
+    }
+    int greedy_count = (int)(max_items * 0.25);
+    if (greedy_count < 3) greedy_count = 3;
+    
+    std::vector<int> h_genes(pop_size * n_items);
+    unsigned int rng = config.seed;
+    
+    for (int p = 0; p < pop_size; p++) {
+        int* chrom = h_genes.data() + p * n_items;
+        memset(chrom, 0, n_items * sizeof(int));
+        
+        if (p < pop_size / 3) {
+            // Greedy
+            int w = 0;
+            for (int i = 0; i < greedy_count && i < n_items; i++) {
+                int idx = sorted_ids[i];
+                if (w + inst.items[idx].peso <= inst.capacidad_peso) {
+                    chrom[idx] = 1;
+                    w += inst.items[idx].peso;
+                }
+            }
+        } else if (p < pop_size * 2 / 3) {
+            // Semi-random (~15%)
+            for (int i = 0; i < n_items; i++) {
+                rng = rng * 1664525u + 1013904223u;
+                chrom[i] = ((rng >> 16) % 10 < 2) ? 1 : 0;
+            }
+        } else {
+            // Full random
+            for (int i = 0; i < n_items; i++) {
+                rng = rng * 1664525u + 1013904223u;
+                chrom[i] = (rng >> 16) & 1;
+            }
+        }
+    }
+    
+    CUDA_CHECK(cudaMemcpy(d_genes, h_genes.data(), pop_size * n_items * sizeof(int), cudaMemcpyHostToDevice));
+}
+
+// ============================================================================
+// AG CUDA Genérico
 // ============================================================================
 
 static GAResult runGA_CUDA_Internal(const Instance& inst, const GAConfig& config, bool optimized) {
     GAResult result = {};
-    CUDATimer timer_transfer, timer_kernel;
+    CUDATimer timer_transfer, timer_kernel, timer_fitness;
     
     int pop_size = config.population_size;
     int n = inst.n_items;
     int elitism = config.elitism_count;
     int blockSize = config.block_size;
     
-    // ---- Transfer data to device ----
+    // ---- Transfer problem data to device ----
     timer_transfer.startTimer();
     
-    // Items data
     std::vector<int> h_valores(n), h_pesos(n), h_volumenes(n), h_categorias(n);
     for (int i = 0; i < n; i++) {
         h_valores[i] = inst.items[i].valor;
@@ -273,81 +312,116 @@ static GAResult runGA_CUDA_Internal(const Instance& inst, const GAConfig& config
         CUDA_CHECK(cudaMemcpy(d_dep_requerido, h_dep_requerido.data(), n_deps * sizeof(int), cudaMemcpyHostToDevice));
     }
     
-    // ---- Población en GPU ----
+    // GPU memory: population, fitness, selection
     int* d_genes;
     int* d_new_genes;
     CUDA_CHECK(cudaMalloc(&d_genes, pop_size * n * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_new_genes, pop_size * n * sizeof(int)));
     
-    // Fitness arrays
     int *d_fitness, *d_valor_total;
     bool* d_factible;
     CUDA_CHECK(cudaMalloc(&d_fitness, pop_size * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_valor_total, pop_size * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_factible, pop_size * sizeof(bool)));
     
-    // Selection indices
     int* d_selected;
     CUDA_CHECK(cudaMalloc(&d_selected, pop_size * sizeof(int)));
     
-    // RNG states
     curandState* d_states;
     CUDA_CHECK(cudaMalloc(&d_states, pop_size * sizeof(curandState)));
     
     timer_transfer.stopTimer();
     result.time_transfer_h2d_ms = timer_transfer.elapsedMs();
     
-    // ---- Initialize population on GPU ----
-    // Generate random genes on CPU and copy to GPU
-    {
-        std::vector<int> h_genes(pop_size * n);
-        unsigned int rng = config.seed;
-        for (int i = 0; i < pop_size * n; i++) {
-            rng = rng * 1664525u + 1013904223u;
-            h_genes[i] = (rng >> 16) & 1;
-        }
-        CUDA_CHECK(cudaMemcpy(d_genes, h_genes.data(), pop_size * n * sizeof(int), cudaMemcpyHostToDevice));
-    }
+    // ---- Initialize population on GPU (greedy + random mix) ----
+    initializePopulationGPU(d_genes, pop_size, n, inst, config);
     
     // Setup RNG states
     {
         int setupBlock = 256;
         int setupGrid = (pop_size + setupBlock - 1) / setupBlock;
-        setupRNG<<<setupGrid, setupBlock>>>(d_states, config.seed, pop_size);
+        setupRNG<<<setupGrid, setupBlock>>>(d_states, config.seed + 99999, pop_size);
         CUDA_CHECK_KERNEL();
     }
     
-    // ---- Evolución ----
+    // ---- Evolution loop ----
     timer_kernel.startTimer();
     
     int gridSize = (pop_size + blockSize - 1) / blockSize;
     int halfGrid = (pop_size / 2 + blockSize - 1) / blockSize;
     
     for (int gen = 0; gen < config.generations; gen++) {
-        // 1. Evaluar fitness
+        // 1. Evaluate fitness
+        timer_fitness.startTimer();
         evaluatePopulation(optimized, d_fitness, d_valor_total, d_factible, d_genes,
                           inst, config,
                           d_item_valores, d_item_pesos, d_item_volumenes, d_item_categorias,
                           d_cat_minimos, d_cat_maximos, d_cat_categorias,
                           d_incomp_a, d_incomp_b, d_dep_item, d_dep_requerido);
+        timer_fitness.stopTimer();
         
-        // 2. Selección por torneo
+        // 2. Elitism: find top-N on CPU, copy directly to new_genes
+        std::vector<int> h_fit(pop_size);
+        CUDA_CHECK(cudaMemcpy(h_fit.data(), d_fitness, pop_size * sizeof(int), cudaMemcpyDeviceToHost));
+        
+        std::vector<int> elite_indices(elitism);
+        {
+            std::vector<bool> taken(pop_size, false);
+            for (int e = 0; e < elitism; e++) {
+                int best_i = -1;
+                int best_f = INT_MIN;
+                for (int i = 0; i < pop_size; i++) {
+                    if (!taken[i] && h_fit[i] > best_f) {
+                        best_f = h_fit[i];
+                        best_i = i;
+                    }
+                }
+                elite_indices[e] = best_i;
+                taken[best_i] = true;
+            }
+        }
+        
+        // Copy elite individuals to the beginning of d_new_genes
+        for (int e = 0; e < elitism; e++) {
+            CUDA_CHECK(cudaMemcpy(
+                d_new_genes + e * n,
+                d_genes + elite_indices[e] * n,
+                n * sizeof(int),
+                cudaMemcpyDeviceToDevice
+            ));
+        }
+        
+        // 3. Tournament selection
         kernelTournamentSelect<<<gridSize, blockSize>>>(d_selected, d_fitness, pop_size, config.tournament_size, d_states);
         CUDA_CHECK_KERNEL();
         
-        // 3. Cruzamiento
+        // 4. Crossover (fill from elitism_count to pop_size)
+        // We need to adjust the crossover to fill positions [elitism, pop_size)
+        // Simple approach: run crossover for full population, then overwrite first N with elite
         kernelCrossover<<<halfGrid, blockSize>>>(d_new_genes, d_genes, d_selected, pop_size, n, config.crossover_rate, d_states);
         CUDA_CHECK_KERNEL();
         
-        // 4. Mutación
-        kernelMutate<<<gridSize, blockSize>>>(d_new_genes, pop_size, n, config.mutation_rate, d_states);
+        // 5. Mutate (skip elite individuals)
+        kernelMutate<<<gridSize, blockSize>>>(d_new_genes, pop_size, n, config.mutation_rate, elitism, d_states);
         CUDA_CHECK_KERNEL();
         
-        // 5. Copiar nueva generación
-        CUDA_CHECK(cudaMemcpy(d_genes, d_new_genes, pop_size * n * sizeof(int), cudaMemcpyDeviceToDevice));
+        // 6. Overwrite elite positions (crossover may have overwritten them)
+        for (int e = 0; e < elitism; e++) {
+            CUDA_CHECK(cudaMemcpy(
+                d_new_genes + e * n,
+                d_genes + elite_indices[e] * n,
+                n * sizeof(int),
+                cudaMemcpyDeviceToDevice
+            ));
+        }
+        
+        // 7. Swap: new_genes -> genes
+        int* temp = d_genes;
+        d_genes = d_new_genes;
+        d_new_genes = temp;
     }
     
-    // Evaluación final
+    // Final fitness evaluation
     evaluatePopulation(optimized, d_fitness, d_valor_total, d_factible, d_genes,
                       inst, config,
                       d_item_valores, d_item_pesos, d_item_volumenes, d_item_categorias,
@@ -356,6 +430,7 @@ static GAResult runGA_CUDA_Internal(const Instance& inst, const GAConfig& config
     
     timer_kernel.stopTimer();
     result.time_kernel_total_ms = timer_kernel.elapsedMs();
+    result.time_fitness_ms = timer_fitness.elapsedMs();
     
     // ---- Transfer results back ----
     timer_transfer.startTimer();
@@ -387,6 +462,7 @@ static GAResult runGA_CUDA_Internal(const Instance& inst, const GAConfig& config
         if (h_factible[i]) feasible_count++;
     }
     
+    // If no feasible solution, take best fitness
     if (best_idx == -1) {
         for (int i = 0; i < pop_size; i++) {
             if (h_fitness[i] > best_fitness) {
@@ -402,7 +478,6 @@ static GAResult runGA_CUDA_Internal(const Instance& inst, const GAConfig& config
     result.feasible_percentage = (float)feasible_count / pop_size;
     result.best_solution_index = best_idx;
     result.time_total_ms = result.time_transfer_h2d_ms + result.time_kernel_total_ms + result.time_transfer_d2h_ms;
-    result.time_fitness_ms = result.time_kernel_total_ms * 0.7; // Estimación
     
     if (best_idx >= 0) {
         result.best_chromosome.resize(n);

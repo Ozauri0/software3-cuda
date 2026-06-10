@@ -109,7 +109,7 @@ def main():
     # Medium: 1000 items
     generate_instance(
         n_items=1000, n_categories=8,
-        incompatibility_ratio=0.005, dependency_ratio=0.01,
+        incompatibility_ratio=0.0002, dependency_ratio=0.002,
         weight_range=(1, 100), volume_range=(1, 80), value_range=(10, 500),
         seed=args.seed + 1, output_dir=os.path.join(base_dir, "medium")
     )
@@ -119,7 +119,7 @@ def main():
     # Large: 10000 items
     generate_instance(
         n_items=10000, n_categories=12,
-        incompatibility_ratio=0.001, dependency_ratio=0.005,
+        incompatibility_ratio=0.00005, dependency_ratio=0.0005,
         weight_range=(1, 200), volume_range=(1, 150), value_range=(5, 1000),
         seed=args.seed + 2, output_dir=os.path.join(base_dir, "large")
     )

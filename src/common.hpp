@@ -98,13 +98,17 @@ inline GAConfig defaultConfig() {
     cfg.seed = 42;
     cfg.crossover_rate = 0.85f;
     cfg.mutation_rate = 0.01f;
-    cfg.elitism_count = 2;
-    cfg.alpha = 10.0f;   // Penalización peso
-    cfg.beta = 10.0f;    // Penalización volumen
-    cfg.gamma = 5.0f;    // Penalización categoría
-    cfg.delta = 20.0f;   // Penalización incompatibilidad
-    cfg.epsilon = 20.0f; // Penalización dependencia
-    cfg.tournament_size = 3;
+    // Penalizaciones (valores justificados: deben ser > max_valor_posible
+    // para que la violación siempre sea peor que cualquier ganancia)
+    // Con 100 items y valor medio ~50, max valor posible ~5000
+    // Penalizaciones deben ser al menos 10x eso por unidad de violación
+    cfg.alpha = 100.0f;   // Penalización por unidad de exceso de peso
+    cfg.beta = 100.0f;    // Penalización por unidad de exceso de volumen
+    cfg.gamma = 50.0f;    // Penalización por violación de categoría
+    cfg.delta = 500.0f;   // Penalización por incompatibilidad (fuerte, es dura)
+    cfg.epsilon = 500.0f; // Penalización por dependencia incumplida (fuerte, es dura)
+    cfg.tournament_size = 5;  // Mayor presión hacia soluciones factibles
+    cfg.elitism_count = 4;  // Preservar los 4 mejores individuos
     cfg.run_cpu = true;
     cfg.run_cuda_basic = true;
     cfg.run_cuda_optimized = true;

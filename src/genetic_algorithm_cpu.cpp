@@ -20,20 +20,62 @@ static inline float nextRandomFloat(unsigned int& state) {
 
 // ============================================================================
 // Generación de población inicial
+// Sesga ~30% de la población hacia soluciones con pocos items (más factibles)
 // ============================================================================
 
 void initializePopulation(std::vector<Chromosome>& population, const Instance& inst, unsigned int seed) {
     unsigned int rng = seed;
     int n = inst.n_items;
     
-    for (auto& chrom : population) {
-        chrom.genes.resize(n);
+    // Calcular cuántos items caben en capacidad
+    int max_items_by_weight = 0;
+    int accum_weight = 0;
+    // Ordenar items por relación valor/peso descendente para greedy
+    std::vector<int> sorted_ids(n);
+    for (int i = 0; i < n; i++) sorted_ids[i] = i;
+    std::sort(sorted_ids.begin(), sorted_ids.end(), [&](int a, int b) {
+        return (float)inst.items[a].valor / inst.items[a].peso > 
+               (float)inst.items[b].valor / inst.items[b].peso;
+    });
+    
+    for (int i = 0; i < n; i++) {
+        if (accum_weight + inst.items[sorted_ids[i]].peso <= inst.capacidad_peso) {
+            accum_weight += inst.items[sorted_ids[i]].peso;
+            max_items_by_weight++;
+        }
+    }
+    // Usamos ~25% de items como target para la inicialización greedy
+    // Menos items = menos violaciones de incompatibilidad
+    int greedy_count = (int)(max_items_by_weight * 0.25);
+    if (greedy_count < 3) greedy_count = 3;
+    
+    for (size_t p = 0; p < population.size(); p++) {
+        Chromosome& chrom = population[p];
+        chrom.genes.resize(n, 0);
         chrom.fitness = 0;
         chrom.valor_total = 0;
         chrom.factible = false;
         
-        for (int i = 0; i < n; i++) {
-            chrom.genes[i] = (nextRandom(rng) % 2);
+        if (p < population.size() / 3) {
+            // Greedy: seleccionar top items por valor/peso hasta cupo
+            int weight_acc = 0;
+            for (int i = 0; i < greedy_count && i < n; i++) {
+                int idx = sorted_ids[i];
+                if (weight_acc + inst.items[idx].peso <= inst.capacidad_peso) {
+                    chrom.genes[idx] = 1;
+                    weight_acc += inst.items[idx].peso;
+                }
+            }
+        } else if (p < population.size() * 2 / 3) {
+            // Semi-aleatorio: ~15% de items seleccionados
+            for (int i = 0; i < n; i++) {
+                chrom.genes[i] = (nextRandom(rng) % 10 < 2) ? 1 : 0;
+            }
+        } else {
+            // Totalmente aleatorio
+            for (int i = 0; i < n; i++) {
+                chrom.genes[i] = nextRandom(rng) % 2;
+            }
         }
     }
 }

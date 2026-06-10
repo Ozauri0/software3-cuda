@@ -142,6 +142,19 @@ int main(int argc, char* argv[]) {
     config.block_size = args.block_size;
     config.seed = args.seed;
     
+    // Scale penalties based on instance size
+    // Key insight: penalty per hard-constraint violation must be >> max possible value
+    // so that ANY feasible solution is preferred over ANY infeasible one
+    float scale = (float)inst.n_items / 100.0f;
+    config.alpha = 100.0f * scale;     // Per unit weight excess
+    config.beta = 100.0f * scale;      // Per unit volume excess
+    config.gamma = 50.0f * scale;      // Per category violation (soft)
+    // Hard constraints: penalty per violation must be so large that
+    // ANY feasible solution (even value=0) beats ANY infeasible one
+    // This is the standard "death penalty" approach for hard constraints
+    config.delta = 1000000.0f;  // Per incompatibility (HARD - effectively infinite)
+    config.epsilon = 1000000.0f; // Per dependency (HARD - effectively infinite)
+    
     printf("\n=== Configuración AG ===\n");
     printf("  Población: %d\n", config.population_size);
     printf("  Generaciones: %d\n", config.generations);
