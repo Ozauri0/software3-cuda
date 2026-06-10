@@ -1,0 +1,39 @@
+# Build artifacts
+mochila_ga_cuda
+mochila_ga_cuda.exe
+*.exe
+*.obj
+*.o
+*.lib
+*.exp
+build/
+
+# CUDA build artifacts
+*.cudafe1.cpp
+*.cudafe1.cii
+*.cudafe1.cu
+*.gpu
+*.module_id
+*.ptx
+*.fatbin
+tmpxft_*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Results (generated - will be regenerated)
+results/*.csv
+results/*.log
+
+# Temp
+*.tmp
+*.log
