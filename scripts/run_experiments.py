@@ -10,9 +10,9 @@ import os
 import sys
 import time
 
-BINARY = "./mochila_ga_cuda"
-if sys.platform == "win32":
-    BINARY = "./mochila_ga_cuda.exe"
+BINARY = "./mochila_ga_cuda.exe"
+if sys.platform != "win32":
+    BINARY = "./mochila_ga_cuda"
 
 RESULTS_DIR = "results"
 CSV_FILE = os.path.join(RESULTS_DIR, "resultados.csv")

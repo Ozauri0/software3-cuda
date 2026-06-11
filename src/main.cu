@@ -20,9 +20,9 @@ void printUsage(const char* prog) {
     printf("Opciones:\n");
     printf("  --instance <small|medium|large>  Instancia a usar (default: small)\n");
     printf("  --variant <cpu|cuda|cuda_opt|all> Variante a ejecutar (default: all)\n");
-    printf("  --population <N>                 Tamaño de población (default: 4096)\n");
-    printf("  --generations <N>                Número de generaciones (default: 500)\n");
-    printf("  --block <N>                      Tamaño de bloque CUDA (default: 256)\n");
+    printf("  --population <N>                 Tamano de poblacion (default: 4096)\n");
+    printf("  --generations <N>                Numero de generaciones (default: 500)\n");
+    printf("  --block <N>                      Tamano de bloque CUDA (default: 256)\n");
     printf("  --seed <N>                       Semilla RNG (default: 42)\n");
     printf("  --help                           Mostrar esta ayuda\n\n");
     printf("Ejemplo:\n");
@@ -106,7 +106,7 @@ void runAndReport(const char* name, GAResult (*func)(const Instance&, const GACo
     if (!result.best_chromosome.empty()) {
         int selected = 0;
         for (int g : result.best_chromosome) selected += g;
-        printf("  Ítems seleccionados: %d / %d\n", selected, inst.n_items);
+        printf("  Items seleccionados: %d / %d\n", selected, inst.n_items);
     }
     printf("\n");
 }
@@ -155,16 +155,16 @@ int main(int argc, char* argv[]) {
     config.delta = 1000000.0f;  // Per incompatibility (HARD - effectively infinite)
     config.epsilon = 1000000.0f; // Per dependency (HARD - effectively infinite)
     
-    printf("\n=== Configuración AG ===\n");
-    printf("  Población: %d\n", config.population_size);
+    printf("\n=== Configuracion AG ===\n");
+    printf("  Poblacion: %d\n", config.population_size);
     printf("  Generaciones: %d\n", config.generations);
     printf("  Block size: %d\n", config.block_size);
     printf("  Semilla: %u\n", config.seed);
     printf("  Cruzamiento: %.2f\n", config.crossover_rate);
-    printf("  Mutación: %.4f\n", config.mutation_rate);
+    printf("  Mutacion: %.4f\n", config.mutation_rate);
     printf("  Elitismo: %d\n", config.elitism_count);
     printf("  Torneo: %d\n", config.tournament_size);
-    printf("  Penalizaciones: α=%.1f β=%.1f γ=%.1f δ=%.1f ε=%.1f\n",
+    printf("  Penalizaciones: a=%.1f b=%.1f c=%.1f d=%.1f e=%.1f\n",
            config.alpha, config.beta, config.gamma, config.delta, config.epsilon);
     
     // ---- CPU Variant ----
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
     
     // ---- CUDA Basic Variant ----
     if (args.variant == "cuda" || args.variant == "all") {
-        runAndReport("CUDA Básico", runGA_CUDA_Basic, inst, config);
+        runAndReport("CUDA Basico", runGA_CUDA_Basic, inst, config);
     }
     
     // ---- CUDA Optimized Variant ----
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
     }
     
     printf("=============================================================\n");
-    printf("  Ejecución completada\n");
+    printf("  Ejecucion completada\n");
     printf("=============================================================\n");
     
     return 0;

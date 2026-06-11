@@ -127,7 +127,7 @@ inline void printInstanceSummary(const Instance& inst) {
     printf("  Capacidad volumen: %d / %d (%.1f%%)\n", 
            inst.capacidad_volumen, inst.suma_total_volumenes,
            100.0f * inst.capacidad_volumen / inst.suma_total_volumenes);
-    printf("  Categorías: %zu reglas\n", inst.category_rules.size());
+    printf("  Categorias: %zu reglas\n", inst.category_rules.size());
     printf("  Incompatibilidades: %zu pares\n", inst.incompatibilities.size());
     printf("  Dependencias: %zu\n", inst.dependencies.size());
 }

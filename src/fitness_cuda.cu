@@ -295,16 +295,30 @@ void evaluateFitness_CUDA_Optimized(
 ) {
     int blockSize = BLOCK_SIZE_OPT;
     int gridSize = (pop_size + blockSize - 1) / blockSize;
-    int sharedMemSize = 4 * n_items * sizeof(int); // 4 arrays de int por item
-    
-    kernelFitnessOptimized<<<gridSize, blockSize, sharedMemSize>>>(
-        d_fitness, d_valor_total, d_factible, d_genes,
-        d_item_valores, d_item_pesos, d_item_volumenes, d_item_categorias,
-        pop_size, n_items, capacidad_peso, capacidad_volumen,
-        d_cat_minimos, d_cat_maximos, d_cat_categorias, n_cat_rules,
-        d_incomp_a, d_incomp_b, n_incompat,
-        d_dep_item, d_dep_requerido, n_deps,
-        alpha, beta, gamma, delta, epsilon
-    );
-    CUDA_CHECK_KERNEL();
+    int sharedMemNeeded = 4 * n_items * (int)sizeof(int);
+
+    if (sharedMemNeeded <= 49152) {
+        // Instance fits in shared memory (48KB = 49152 bytes)
+        kernelFitnessOptimized<<<gridSize, blockSize, sharedMemNeeded>>>(
+            d_fitness, d_valor_total, d_factible, d_genes,
+            d_item_valores, d_item_pesos, d_item_volumenes, d_item_categorias,
+            pop_size, n_items, capacidad_peso, capacidad_volumen,
+            d_cat_minimos, d_cat_maximos, d_cat_categorias, n_cat_rules,
+            d_incomp_a, d_incomp_b, n_incompat,
+            d_dep_item, d_dep_requerido, n_deps,
+            alpha, beta, gamma, delta, epsilon
+        );
+        CUDA_CHECK_KERNEL();
+    } else {
+        // Too many items for shared memory, use basic kernel
+        evaluateFitness_CUDA_Basic(
+            d_fitness, d_valor_total, d_factible, d_genes,
+            d_item_valores, d_item_pesos, d_item_volumenes, d_item_categorias,
+            pop_size, n_items, capacidad_peso, capacidad_volumen,
+            d_cat_minimos, d_cat_maximos, d_cat_categorias, n_cat_rules,
+            d_incomp_a, d_incomp_b, n_incompat,
+            d_dep_item, d_dep_requerido, n_deps,
+            alpha, beta, gamma, delta, epsilon
+        );
+    }
 }

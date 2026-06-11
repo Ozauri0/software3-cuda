@@ -1,4 +1,4 @@
-// instance_loader.cpp - Implementación del cargador de instancias
+// instance_loader.cpp - Implementacion del cargador de instancias
 #include "instance_loader.hpp"
 #include <fstream>
 #include <sstream>
@@ -67,7 +67,7 @@ std::vector<CategoryRule> loadCategoryRules(const std::string& filepath) {
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
-        printf("  Advertencia: No se encontró %s (sin reglas de categoría)\n", filepath.c_str());
+        printf("  Advertencia: No se encontro %s (sin reglas de categoria)\n", filepath.c_str());
         return rules;
     }
     
@@ -86,7 +86,7 @@ std::vector<CategoryRule> loadCategoryRules(const std::string& filepath) {
         rules.push_back(rule);
     }
     
-    printf("  Cargadas %zu reglas de categoría\n", rules.size());
+    printf("  Cargadas %zu reglas de categoria\n", rules.size());
     return rules;
 }
 
@@ -99,7 +99,7 @@ std::vector<Incompatibility> loadIncompatibilities(const std::string& filepath) 
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
-        printf("  Advertencia: No se encontró %s (sin incompatibilidades)\n", filepath.c_str());
+        printf("  Advertencia: No se encontro %s (sin incompatibilidades)\n", filepath.c_str());
         return incompat;
     }
     
@@ -130,7 +130,7 @@ std::vector<Dependency> loadDependencies(const std::string& filepath) {
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
-        printf("  Advertencia: No se encontró %s (sin dependencias)\n", filepath.c_str());
+        printf("  Advertencia: No se encontro %s (sin dependencias)\n", filepath.c_str());
         return deps;
     }
     
