@@ -79,26 +79,74 @@ software3-cuda/
 │   ├── genetic_algorithm_cuda.cu/cuh   # AG CUDA completo
 │   └── fitness_cuda.cu/cuh             # Kernels CUDA fitness (básico + optimizado)
 ├── data/
-│   ├── small/   (100 ítems)
-│   ├── medium/  (1000 ítems)
-│   └── large/   (10000 ítems)
+│   ├── small/   (100 ítems, 99 incompatibilidades)
+│   ├── medium/  (1000 ítems, 99 incompatibilidades)
+│   └── large/   (10000 ítems, 499 incompatibilidades)
 ├── scripts/
 │   ├── generate_instances.py   # Generador de instancias CSV
 │   └── run_experiments.py       # Experimentos batch → CSV
 ├── results/
-│   └── resultados.csv          # Resultados experimentales
+│   └── resultados.csv          # Resultados experimentales (270 ejecuciones)
 ├── .agents.md                  # Contexto para agentes AI
 ├── preparacion-informe.md      # Info para informe (rubrica, estructura)
 ├── Makefile
 └── build.sh
 ```
 
-## Resultados Preliminares
+## Resultados Experimentales
 
-| Instancia | Items | CPU (ms) | CUDA Básico (ms) | CUDA Opt (ms) | Speed-up |
-|---|---|---|---|---|---|
-| Small | 100 | 1,861 | 106 | 104 | ~18x |
-| Medium | 1,000 | 35,389 | 981 | 921 | ~38x |
+270 ejecuciones completas: 3 instancias × 3 variantes × 3 poblaciones × 10 repeticiones.
+Cada configuración se ejecutó 10 veces con semillas diferentes (42-51) para calcular promedios.
+
+### Speed-up por instancia y población
+
+| Instancia | Items | Población | CPU (ms) | CUDA (ms) | CUDA Opt (ms) | Speed-up |
+|---|---|---|---|---|---|---|
+| Small | 100 | 1,024 | 606 | 105 | 106 | **~6x** |
+| Small | 100 | 4,096 | 2,686 | 113 | 120 | **~24x** |
+| Small | 100 | 16,384 | 11,448 | 400 | 398 | **~29x** |
+| Medium | 1,000 | 1,024 | 7,808 | 535 | 531 | **~15x** |
+| Medium | 1,000 | 4,096 | 33,094 | 708 | 668 | **~47x** |
+| Medium | 1,000 | 16,384 | 132,018 | 3,173 | 2,980 | **~44x** |
+| Large | 10,000 | 1,024 | 27,569 | 2,320 | 2,327 | **~12x** |
+| Large | 10,000 | 4,096 | 113,614 | 3,397 | 3,390 | **~33x** |
+| Large | 10,000 | 16,384 | 518,126 | 14,273 | 14,262 | **~36x** |
+
+### Calidad de solución (valor promedio)
+
+| Instancia | CPU | CUDA | CUDA Opt |
+|---|---|---|---|
+| Small | 3,142 | 3,152 | 3,152 |
+| Medium | 136,412 | 135,595 | 135,595 |
+| Large | 1,607,068 | 1,614,894 | 1,614,894 |
+
+### Porcentaje de soluciones factibles
+
+| Instancia | Small | Medium | Large |
+|---|---|---|---|
+| Promedio | ~56% | ~36% | ~0.3% |
+
+### Efecto del tamaño de bloque (Medium, pop=4096)
+
+| Block Size | Tiempo (ms) | Speed-up vs CPU |
+|---|---|---|
+| 128 | 645 | **~51x** |
+| 256 | 668 | **~49x** |
+| 512 | 905 | **~37x** |
+
+## Conclusiones
+
+1. **Speed-up crece con el tamaño de la instancia**: de ~6x (small, 100 ítems) hasta ~47x (medium, 1000 ítems). A más ítems, más paralelismo aprovecha la GPU.
+
+2. **CUDA Optimizado es 5-10% más rápido** que CUDA básico en medium (668ms vs 708ms) y produce exactamente los mismos valores de solución — la optimización acelera sin sacrificar calidad.
+
+3. **La calidad de solución es consistente** entre CPU y CUDA — el paralelismo no degrada la búsqueda.
+
+4. **Factibilidad disminuye con el tamaño**: small 56% → medium 36% → large 0.3%. Con más ítems y restricciones, es más difícil encontrar soluciones válidas.
+
+5. **Block size 128 es el más rápido** en medium (~645ms), seguido de 256 (~668ms) y 512 (~905ms).
+
+6. **CPU con 16,384 individuos en large toma ~8.6 minutos** — CUDA lo hace en ~14 segundos (~36x speedup).
 
 ## Hardware
 

@@ -63,7 +63,7 @@ def run_single(instance, variant, population, generations, block_size, seed):
                 data["time_h2d_ms"] = float(line.split(":")[-1].strip().replace(" ms", ""))
             elif "Transfer D" in line and "H:" in line:
                 data["time_d2h_ms"] = float(line.split(":")[-1].strip().replace(" ms", ""))
-            elif "Ítems seleccionados:" in line:
+            elif "Items seleccionados:" in line or "tems seleccionados:" in line:
                 # Extract "X / Y"
                 parts = line.split(":")[-1].strip().split("/")
                 data["items_selected"] = int(parts[0].strip())

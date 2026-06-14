@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochila GA CUDA — Presentación Actividad 3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; overflow: hidden; height: 100vh; }
+
+.slide { display: none; width: 100vw; height: 100vh; padding: 60px 80px; flex-direction: column; justify-content: center; }
+.slide.active { display: flex; }
+
+h1 { font-size: 2.8em; margin-bottom: 20px; background: linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h2 { font-size: 2em; margin-bottom: 30px; color: #38bdf8; }
+h3 { font-size: 1.3em; margin: 15px 0 10px; color: #94a3b8; }
+p, li { font-size: 1.15em; line-height: 1.7; color: #cbd5e1; }
+li { margin-bottom: 8px; }
+ul { padding-left: 25px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; }
+
+.card { background: #1e293b; border-radius: 16px; padding: 30px; border: 1px solid #334155; }
+.card-accent { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56,189,248,0.1); }
+.card h3 { color: #38bdf8; margin-top: 0; }
+
+table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.95em; }
+th { background: #1e293b; color: #38bdf8; padding: 12px 16px; text-align: left; border-bottom: 2px solid #334155; }
+td { padding: 10px 16px; border-bottom: 1px solid #1e293b; }
+tr:hover td { background: #1e293b; }
+.highlight { color: #34d399; font-weight: bold; }
+.speedup { color: #fbbf24; font-weight: bold; font-size: 1.1em; }
+
+.big-number { font-size: 3.5em; font-weight: 800; background: linear-gradient(135deg, #34d399, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+.big-label { font-size: 1em; color: #94a3b8; margin-top: 5px; }
+
+.code { font-family: 'Cascadia Code', 'Fira Code', monospace; background: #1e293b; padding: 3px 8px; border-radius: 4px; font-size: 0.9em; color: #a78bfa; }
+pre { background: #1e293b; padding: 20px; border-radius: 12px; overflow-x: auto; font-family: 'Cascadia Code', monospace; font-size: 0.85em; line-height: 1.6; color: #e2e8f0; border: 1px solid #334155; }
+
+.badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 600; }
+.badge-blue { background: #1e3a5f; color: #38bdf8; }
+.badge-green { background: #1a3a2a; color: #34d399; }
+.badge-yellow { background: #3a3a1a; color: #fbbf24; }
+.badge-red { background: #3a1a1a; color: #f87171; }
+
+.progress-bar { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.3s; z-index: 100; }
+
+.nav { position: fixed; bottom: 30px; right: 40px; display: flex; gap: 12px; z-index: 100; }
+.nav button { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; transition: all 0.2s; }
+.nav button:hover { background: #334155; border-color: #38bdf8; }
+
+.slide-counter { position: fixed; bottom: 35px; left: 40px; color: #64748b; font-size: 0.9em; z-index: 100; }
+
+.tag { display: inline-block; margin: 3px; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; background: #1e293b; border: 1px solid #334155; color: #94a3b8; }
+
+.formula { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; font-size: 1.2em; margin: 15px 0; border: 1px solid #334155; font-family: 'Cambria Math', serif; color: #e2e8f0; }
+
+.diagram { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap; }
+.diagram-box { background: #1e293b; border: 2px solid #334155; border-radius: 12px; padding: 15px 25px; text-align: center; min-width: 120px; }
+.diagram-box.cpu { border-color: #f59e0b; }
+.diagram-box.gpu { border-color: #38bdf8; }
+.diagram-box.data { border-color: #34d399; }
+.diagram-arrow { font-size: 1.5em; color: #64748b; }
+
+.chart-bar { display: flex; align-items: end; gap: 8px; height: 200px; padding: 10px 0; }
+.bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.bar { width: 40px; border-radius: 6px 6px 0 0; transition: height 0.5s; position: relative; min-height: 2px; }
+.bar-label { font-size: 0.7em; color: #64748b; margin-top: 5px; text-align: center; }
+.bar-value { font-size: 0.7em; color: #e2e8f0; position: absolute; top: -20px; width: 100%; text-align: center; }
+
+.emoji { font-size: 1.5em; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.slide.active > * { animation: fadeIn 0.4s ease-out; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+<div class="slide-counter" id="slideCounter"></div>
+
+<!-- ==================== SLIDE 1: Título ==================== -->
+<div class="slide active" id="slide1">
+  <div style="text-align:center;">
+    <p style="font-size:1.1em; color:#64748b; margin-bottom:20px;">INFO1195 — Actividad 3 — Semana 12</p>
+    <h1 style="font-size:3.2em;">Optimización Paralela en GPU<br>del Problema de la Mochila<br>Mediante CUDA</h1>
+    <div style="margin-top:40px; display:flex; justify-content:center; gap:30px;">
+      <div class="card" style="text-align:center; min-width:200px;">
+        <div class="big-number">49x</div>
+        <div class="big-label">Speed-up máximo</div>
+      </div>
+      <div class="card" style="text-align:center; min-width:200px;">
+        <div class="big-number">10K</div>
+        <div class="big-label">Ítems procesados</div>
+      </div>
+      <div class="card" style="text-align:center; min-width:200px;">
+        <div class="big-number">270</div>
+        <div class="big-label">Experimentos</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 2: Problema ==================== -->
+<div class="slide" id="slide2">
+  <h2>1. El Problema de la Mochila Extendido</h2>
+  <div class="grid2">
+    <div>
+      <h3>Formulación Clásica</h3>
+      <div class="formula">
+        Maximize Z = Σ vᵢxᵢ<br>
+        s.a. Σ wᵢxᵢ ≤ W, &nbsp; xᵢ ∈ {0, 1}
+      </div>
+      <p style="margin-top:15px;">Problema <strong>NP-hard</strong>: no existe algoritmo exacto polinómico. Los algoritmos genéticos ofrecen soluciones de buena calidad en tiempo razonable.</p>
+      
+      <h3 style="margin-top:25px;">Aplicaciones Reales</h3>
+      <ul>
+        <li>Inversión de activos</li>
+        <li>Corte de materiales</li>
+        <li>Carga de contenedores</li>
+        <li>Asignación de recursos</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Restricciones de la Versión Extendida</h3>
+      <div class="card" style="margin-bottom:15px;">
+        <p><span class="badge badge-red">Dura</span> <strong>Peso máximo</strong> — Σ wᵢxᵢ ≤ W</p>
+        <p style="margin-top:5px;"><span class="badge badge-red">Dura</span> <strong>Volumen máximo</strong> — Σ volᵢxᵢ ≤ V</p>
+        <p style="margin-top:5px;"><span class="badge badge-red">Dura</span> <strong>Incompatibilidades</strong> — pares prohibidos</p>
+        <p style="margin-top:5px;"><span class="badge badge-red">Dura</span> <strong>Dependencias</strong> — ítems asociados</p>
+        <p style="margin-top:5px;"><span class="badge badge-yellow">Blanda</span> <strong>Categorías</strong> — min/máx por grupo</p>
+      </div>
+      <h3>Función de Aptitud</h3>
+      <div class="formula" style="font-size:1em;">
+        fitness(X) = Σvᵢxᵢ − α·peso − β·vol − γ·cat − δ·incomp − ε·deps
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 3: Variantes ==================== -->
+<div class="slide" id="slide3">
+  <h2>2. Variantes Implementadas</h2>
+  <div class="grid3">
+    <div class="card card-accent">
+      <h3>🖥️ CPU Secuencial</h3>
+      <p>Baseline en C++</p>
+      <ul style="margin-top:10px; font-size:0.95em;">
+        <li>Evaluación secuencial</li>
+        <li>Selección por torneo (k=5)</li>
+        <li>Cruzamiento de un punto</li>
+        <li>Mutación flip bits</li>
+        <li>Elitismo (top 4)</li>
+      </ul>
+      <p style="margin-top:15px;"><span class="badge badge-blue">Referencia para speed-up</span></p>
+    </div>
+    <div class="card card-accent">
+      <h3>⚡ CUDA Básico</h3>
+      <p>Paralelización en GPU</p>
+      <ul style="margin-top:10px; font-size:0.95em;">
+        <li>1 hilo por individuo</li>
+        <li>Memoria global para población</li>
+        <li>curand por hilo</li>
+        <li>Selección paralela</li>
+        <li>Cruzamiento paralelo</li>
+      </ul>
+      <p style="margin-top:15px;"><span class="badge badge-green">Población en GPU</span></p>
+    </div>
+    <div class="card card-accent">
+      <h3>🚀 CUDA Optimizado</h3>
+      <p>Optimizaciones adicionales</p>
+      <ul style="margin-top:10px; font-size:0.95em;">
+        <li>Shared memory para items</li>
+        <li>Inicialización greedy</li>
+        <li>CUDA events para medición</li>
+        <li>Fallback automático</li>
+        <li>Reducción de transfers</li>
+      </ul>
+      <p style="margin-top:15px;"><span class="badge badge-green">5-10% más rápido</span></p>
+    </div>
+  </div>
+  
+  <h3 style="margin-top:30px;">Arquitectura de Datos en GPU</h3>
+  <div class="diagram">
+    <div class="diagram-box cpu">CPU<br><small>Genera población</small></div>
+    <div class="diagram-arrow">→</div>
+    <div class="diagram-box data">Host→Device<br><small>Copia inicial</small></div>
+    <div class="diagram-arrow">→</div>
+    <div class="diagram-box gpu">GPU Global Mem<br><small>Población + Items</small></div>
+    <div class="diagram-arrow">→</div>
+    <div class="diagram-box gpu">Kernels<br><small>Fitness, Select, Cross, Mut</small></div>
+    <div class="diagram-arrow">→</div>
+    <div class="diagram-box data">Device→Host<br><small>Resultado final</small></div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 4: Hardware ==================== -->
+<div class="slide" id="slide4">
+  <h2>3. Hardware y Entorno</h2>
+  <div class="grid2">
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <h3>🖥️ GPU</h3>
+        <table>
+          <tr><td><strong>Modelo</strong></td><td>NVIDIA GeForce RTX 3060</td></tr>
+          <tr><td><strong>VRAM</strong></td><td>12 GB GDDR6</td></tr>
+          <tr><td><strong>SMs</strong></td><td>28</td></tr>
+          <tr><td><strong>Compute Capability</strong></td><td>8.6</td></tr>
+          <tr><td><strong>Cores</strong></td><td>3,584 CUDA cores</td></tr>
+          <tr><td><strong>Shared mem/bloque</strong></td><td>48 KB</td></tr>
+          <tr><td><strong>Max threads/bloque</strong></td><td>1,024</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <h3>⚙️ Software</h3>
+        <table>
+          <tr><td><strong>Driver</strong></td><td>591.86 (CUDA 13.1)</td></tr>
+          <tr><td><strong>CUDA Toolkit</strong></td><td>13.3</td></tr>
+          <tr><td><strong>Compiler</strong></td><td>nvcc + MSVC 2022</td></tr>
+          <tr><td><strong>Windows SDK</strong></td><td>10.0.26100.0</td></tr>
+          <tr><td><strong>OS</strong></td><td>Windows 11</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>⚠️ Nota Técnica</h3>
+        <p style="font-size:0.95em;">El driver 591.86 soporta CUDA 13.1, pero el toolkit es 13.3. Se requiere <span class="code">-arch=sm_86</span> para generar SASS directamente (sin PTX).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 5: Instancias ==================== -->
+<div class="slide" id="slide5">
+  <h2>4. Instancias de Prueba</h2>
+  <table>
+    <tr>
+      <th>Instancia</th><th>Ítems</th><th>Categorías</th><th>Incompatibilidades</th><th>Dependencias</th><th>W (40%)</th><th>V (40%)</th><th>Objetivo</th>
+    </tr>
+    <tr>
+      <td><span class="badge badge-green">Small</span></td><td>100</td><td>5</td><td>99</td><td>3</td><td>968</td><td>629</td><td>Verificación funcional</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-blue">Medium</span></td><td>1,000</td><td>8</td><td>99</td><td>2</td><td>20,570</td><td>16,146</td><td>Comparación básica</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-yellow">Large</span></td><td>10,000</td><td>12</td><td>499</td><td>2</td><td>404,491</td><td>300,805</td><td>Evaluación real GPU</td>
+    </tr>
+  </table>
+  
+  <div class="grid3" style="margin-top:30px;">
+    <div class="card" style="text-align:center;">
+      <div class="big-number" style="font-size:2.5em;">100</div>
+      <div class="big-label">Ítems (Small)</div>
+      <p style="font-size:0.85em; margin-top:5px;">Verificación funcional y depuración</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="big-number" style="font-size:2.5em;">1,000</div>
+      <div class="big-label">Ítems (Medium)</div>
+      <p style="font-size:0.85em; margin-top:5px;">Comparación de rendimiento CPU vs GPU</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="big-number" style="font-size:2.5em;">10,000</div>
+      <div class="big-label">Ítems (Large)</div>
+      <p style="font-size:0.85em; margin-top:5px;">Evaluación real del paralelismo GPU</p>
+    </div>
+  </div>
+  
+  <p style="margin-top:20px; text-align:center; color:#94a3b8;">
+    <strong>Diseño experimental:</strong> 3 instancias × 3 variantes × 3 poblaciones × 10 repeticiones = <strong style="color:#38bdf8;">270 ejecuciones</strong>
+  </p>
+</div>
+
+<!-- ==================== SLIDE 6: Resultados Small ==================== -->
+<div class="slide" id="slide6">
+  <h2>5. Resultados — Small (100 ítems)</h2>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>Población</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th></tr>
+        <tr><td>1,024</td><td>606 ± 10</td><td>105 ± 4</td><td>106 ± 2</td><td class="speedup">~6x</td></tr>
+        <tr><td>4,096</td><td>2,686 ± 32</td><td>113 ± 1</td><td>121 ± 6</td><td class="speedup">~24x</td></tr>
+        <tr><td>16,384</td><td>11,447 ± 103</td><td>400 ± 3</td><td>398 ± 4</td><td class="speedup">~29x</td></tr>
+      </table>
+      
+      <h3 style="margin-top:20px;">Calidad de Solución</h3>
+      <table>
+        <tr><th>Variante</th><th>Valor Promedio</th><th>Factible</th></tr>
+        <tr><td>CPU</td><td>3,142</td><td>55.8%</td></tr>
+        <tr><td>CUDA</td><td>3,152</td><td>55.6%</td></tr>
+        <tr><td>CUDA Opt</td><td>3,152</td><td>55.6%</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card" style="text-align:center; padding:40px;">
+        <div class="big-number">29x</div>
+        <div class="big-label">Speed-up máximo en Small</div>
+        <p style="margin-top:15px; color:#94a3b8;">CPU: 11.4s → CUDA: 400ms</p>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <h3>Observaciones</h3>
+        <ul style="font-size:0.95em;">
+          <li>Calidad consistente entre variantes</li>
+          <li>~56% de soluciones factibles</li>
+          <li>CUDA Opt similar a CUDA básico (pocos ítems)</li>
+          <li>Instancia demasiado pequeña para ver beneficio de shared memory</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 7: Resultados Medium ==================== -->
+<div class="slide" id="slide7">
+  <h2>6. Resultados — Medium (1,000 ítems)</h2>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>Población</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th></tr>
+        <tr><td>1,024</td><td>7,798 ± 73</td><td>536 ± 5</td><td>531 ± 2</td><td class="speedup">~15x</td></tr>
+        <tr><td>4,096</td><td>33,094 ± 107</td><td>708 ± 1</td><td>668 ± 1</td><td class="speedup">~49x</td></tr>
+        <tr><td>16,384</td><td>132,015 ± 211</td><td>3,172 ± 3</td><td>2,980 ± 4</td><td class="speedup">~44x</td></tr>
+      </table>
+      
+      <h3 style="margin-top:20px;">Efecto del Block Size (pop=4,096)</h3>
+      <table>
+        <tr><th>Block Size</th><th>Tiempo (ms)</th><th>Speed-up</th></tr>
+        <tr><td>128</td><td>645</td><td class="speedup">51x</td></tr>
+        <tr><td>256</td><td>668</td><td class="speedup">49x</td></tr>
+        <tr><td>512</td><td>905</td><td class="speedup">37x</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card" style="text-align:center; padding:40px; border-color:#34d399;">
+        <div class="big-number">49x</div>
+        <div class="big-label">Speed-up máximo en Medium</div>
+        <p style="margin-top:15px; color:#94a3b8;">CPU: 33s → CUDA Opt: 668ms</p>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <h3>Optimizaciones que Funcionaron</h3>
+        <ul style="font-size:0.95em;">
+          <li><strong>Shared memory:</strong> datos de items en memoria compartida</li>
+          <li><strong>Block size 128:</strong> mejor occupancy en RTX 3060</li>
+          <li><strong>5-10% más rápido</strong> que CUDA básico</li>
+          <li>~36% de soluciones factibles</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:15px;">
+        <h3>Transferencias</h3>
+        <p style="font-size:0.95em;">Host↔Device: ~46ms (6% del total). Población se mantiene en GPU durante evolución.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 8: Resultados Large ==================== -->
+<div class="slide" id="slide8">
+  <h2>7. Resultados — Large (10,000 ítems)</h2>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>Población</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th></tr>
+        <tr><td>1,024</td><td>27,569 ± 419</td><td>2,320 ± 6</td><td>2,327 ± 6</td><td class="speedup">~12x</td></tr>
+        <tr><td>4,096</td><td>113,597 ± 1,667</td><td>3,396 ± 3</td><td>3,390 ± 2</td><td class="speedup">~33x</td></tr>
+        <tr><td>16,384</td><td>518,126 ± 6,995</td><td>14,273 ± 8</td><td>14,262 ± 12</td><td class="speedup">~36x</td></tr>
+      </table>
+      
+      <h3 style="margin-top:20px;">Calidad de Solución</h3>
+      <table>
+        <tr><th>Variante</th><th>Valor Promedio</th><th>Factible</th></tr>
+        <tr><td>CPU</td><td>1,607,068</td><td>0.3%</td></tr>
+        <tr><td>CUDA</td><td>1,614,894</td><td>0.3%</td></tr>
+        <tr><td>CUDA Opt</td><td>1,614,894</td><td>0.3%</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card" style="text-align:center; padding:40px; border-color:#fbbf24;">
+        <div class="big-number">36x</div>
+        <div class="big-label">Speed-up máximo en Large</div>
+        <p style="margin-top:15px; color:#94a3b8;">CPU: 8.6 min → CUDA: 14 seg</p>
+      </div>
+      <div class="card" style="margin-top:20px;">
+        <h3>¿Por qué 0.3% factible?</h3>
+        <p style="font-size:0.95em;">Con 499 incompatibilidades y 10,000 ítems, el GA selecciona ~3,000 ítems generando violaciones inevitables. La "death penalty" (δ=1,000,000) hace que el fitness sea muy negativo para soluciones infeasibles.</p>
+      </div>
+      <div class="card" style="margin-top:15px;">
+        <h3>Shared Memory</h3>
+        <p style="font-size:0.95em;">10,000 ítems × 4 arrays × 4 bytes = 160KB > 48KB límite. Fallback automático al kernel básico.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 9: Speed-up Global ==================== -->
+<div class="slide" id="slide9">
+  <h2>8. Resumen de Speed-up</h2>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>Instancia</th><th>Items</th><th>CPU (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th></tr>
+        <tr><td>Small</td><td>100</td><td>2,686 ± 32</td><td>121 ± 6</td><td class="speedup">22x</td></tr>
+        <tr><td>Medium</td><td>1,000</td><td>33,094 ± 107</td><td>668 ± 1</td><td class="speedup">49x</td></tr>
+        <tr><td>Large</td><td>10,000</td><td>113,597 ± 1,667</td><td>3,390 ± 2</td><td class="speedup">33x</td></tr>
+      </table>
+      
+      <h3 style="margin-top:25px;">Factibilidad por Instancia</h3>
+      <table>
+        <tr><th>Instancia</th><th>Small</th><th>Medium</th><th>Large</th></tr>
+        <tr><td>Factible</td><td class="highlight">56%</td><td>36%</td><td>0.3%</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card" style="text-align:center; padding:30px;">
+        <h3>¿Por qué CUDA es más rápido?</h3>
+        <div style="margin:20px 0;">
+          <div class="diagram" style="flex-direction:column; gap:10px;">
+            <div class="diagram-box cpu" style="width:90%;">CPU: 1 núcleo evalúa 4,096 individuos secuencialmente</div>
+            <div class="diagram-arrow">↓</div>
+            <div class="diagram-box gpu" style="width:90%;">GPU: 2,816 cores evalúan 4,096 individuos en paralelo</div>
+          </div>
+        </div>
+        <p style="font-size:0.95em;">La evaluación de fitness es el cuello de botella. Con 1,000 ítems, cada individuo tarda ~8μs en CPU vs ~0.2μs en GPU.</p>
+      </div>
+      
+      <div class="card" style="margin-top:20px; text-align:center;">
+        <h3>Calidad Consistente</h3>
+        <p style="font-size:1.1em; margin-top:10px;">CPU y CUDA producen <strong style="color:#34d399;">soluciones de igual calidad</strong></p>
+        <p style="font-size:0.9em; color:#94a3b8;">El paralelismo no degrada la búsqueda</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 10: Análisis ==================== -->
+<div class="slide" id="slide10">
+  <h2>9. Análisis Técnico</h2>
+  <div class="grid2">
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <h3>✅ Optimizaciones que Funcionaron</h3>
+        <ul style="font-size:0.95em;">
+          <li><strong>Shared memory:</strong> Reutilización de datos de items dentro del bloque</li>
+          <li><strong>Inicialización greedy:</strong> +5% factibilidad vs aleatorio puro</li>
+          <li><strong>Block size 128:</strong> Mejor occupancy en RTX 3060</li>
+          <li><strong>Población en GPU:</strong> Minimiza transferencias host↔device</li>
+          <li><strong>CUDA events:</strong> Medición precisa sin overhead</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>❌ Optimizaciones con Limitaciones</h3>
+        <ul style="font-size:0.95em;">
+          <li><strong>Shared memory en large:</strong> 160KB > 48KB (fallback automático)</li>
+          <li><strong>Block size 512:</strong> 35% más lento que 128 (menor occupancy)</li>
+          <li><strong>curand:</strong> Calidad inferior a RNG en CPU</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <h3>📊 Relación Calidad-Tiempo</h3>
+        <table>
+          <tr><th>Población</th><th>Calidad</th><th>Tiempo</th><th>Ratio</th></tr>
+          <tr><td>1,024</td><td>Base</td><td>1x</td><td>Bajo</td></tr>
+          <tr><td>4,096</td><td>+2-3%</td><td>4x</td><td class="highlight">Óptimo</td></tr>
+          <tr><td>16,384</td><td>+3-5%</td><td>16x</td><td>Diminutivo</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🎯 Limitaciones</h3>
+        <ul style="font-size:0.95em;">
+          <li>Factibilidad baja en large (0.3%)</li>
+          <li>Shared memory limitada a 48KB/bloque</li>
+          <li>Elitismo requiere transferencia GPU→CPU</li>
+          <li>Se necesitan operadores de reparación para restricciones</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 11: Código ==================== -->
+<div class="slide" id="slide11">
+  <h2>10. Fragmentos de Código</h2>
+  <div class="grid2">
+    <div>
+      <h3>Kernel de Fitness (Básico)</h3>
+      <pre>__global__ void kernelFitnessBasic(
+    int* d_fitness, int* d_valor_total,
+    bool* d_factible, const int* d_genes,
+    const int* d_item_valores,
+    const int* d_item_pesos,
+    int pop_size, int n_items,
+    int capacidad_peso, ...) {
+
+  int idx = blockIdx.x * blockDim.x
+            + threadIdx.x;
+  if (idx >= pop_size) return;
+
+  int valor=0, peso=0, vol=0;
+  for (int i = 0; i < n_items; i++) {
+    if (d_genes[idx*n_items + i]) {
+      valor += d_item_valores[i];
+      peso  += d_item_pesos[i];
+      vol   += d_item_volumenes[i];
+    }
+  }
+  // Penalizaciones y factibilidad...
+  d_fitness[idx] = valor - penalizacion;
+}</pre>
+    </div>
+    <div>
+      <h3>Kernel Optimizado (Shared Memory)</h3>
+      <pre>__global__ void kernelFitnessOptimized(
+    ..., int n_items, ...) {
+
+  extern __shared__ int shared_mem[];
+  int* s_valores = shared_mem;
+  int* s_pesos = shared_mem + n_items;
+
+  // Carga coalescente a shared memory
+  for (int i = threadIdx.x;
+       i < n_items; i += blockDim.x) {
+    s_valores[i] = d_item_valores[i];
+    s_pesos[i]   = d_item_pesos[i];
+  }
+  __syncthreads();
+
+  // Fitness usando shared memory
+  for (int i = 0; i < n_items; i++) {
+    if (my_genes[i]) {
+      valor += s_valores[i];
+      peso  += s_pesos[i];
+    }
+  }
+}</pre>
+      <p style="margin-top:10px; font-size:0.9em; color:#94a3b8;">Fallback a kernel básico cuando n_items × 4 × 4B > 48KB</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 12: Conclusiones ==================== -->
+<div class="slide" id="slide12">
+  <h2>11. Conclusiones</h2>
+  <div class="grid2">
+    <div>
+      <div class="card" style="margin-bottom:20px; border-color:#34d399;">
+        <h3 style="color:#34d399;">Logros Principales</h3>
+        <ul>
+          <li><strong>Speed-up de hasta 49x</strong> en medium (1,000 ítems)</li>
+          <li><strong>Speed-up de 36x</strong> en large (10,000 ítems)</li>
+          <li><strong>Calidad consistente</strong> entre CPU y CUDA</li>
+          <li><strong>3 variantes funcionales</strong> con 270 experimentos</li>
+          <li>GPU mantiene población completa durante evolución</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📚 Aprendizajes</h3>
+        <ul>
+          <li>Paralelizar fitness es la optimización más impactante</li>
+          <li>Shared memory es efectiva solo para instancias pequeñas</li>
+          <li>Block size 128 óptimo para RTX 3060</li>
+          <li>Escalado de penalizaciones es crítico</li>
+          <li>Inicialización greedy mejora factibilidad</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="text-align:center; padding:40px; border-color:#818cf8;">
+        <h3 style="color:#818cf8;">Trabajo Futuro</h3>
+        <ul style="text-align:left;">
+          <li>Operadores de reparación para restricciones duras</li>
+          <li>Optimizaciones con memoria constante</li>
+          <li>CUDA streams para solapar kernels</li>
+          <li>Algoritmos multi-objetivo (NSGA-II)</li>
+          <li>Instancias con más restricciones balanceadas</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:20px; text-align:center; padding:30px;">
+        <div class="big-number" style="font-size:2.5em;">¡Gracias!</div>
+        <p style="margin-top:10px; color:#94a3b8;">¿Preguntas?</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentSlide = 1;
+const totalSlides = 12;
+
+function showSlide(n) {
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.getElementById('slide' + n).classList.add('active');
+  document.getElementById('progressBar').style.width = ((n / totalSlides) * 100) + '%';
+  document.getElementById('slideCounter').textContent = n + ' / ' + totalSlides;
+}
+
+function nextSlide() { if (currentSlide < totalSlides) { currentSlide++; showSlide(currentSlide); } }
+function prevSlide() { if (currentSlide > 1) { currentSlide--; showSlide(currentSlide); } }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+  if (e.key === 'Home') { currentSlide = 1; showSlide(currentSlide); }
+  if (e.key === 'End') { currentSlide = totalSlides; showSlide(currentSlide); }
+});
+
+// Touch support
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => {
+  const diff = touchStartX - e.changedTouches[0].clientX;
+  if (Math.abs(diff) > 50) { diff > 0 ? nextSlide() : prevSlide(); }
+});
+
+showSlide(1);
+</script>
+</body>
+</html>

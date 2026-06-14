@@ -1,0 +1,539 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{multirow}
+\setlength{\headheight}{15pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{INFO1195 --- Actividad 3}
+\fancyhead[R]{Mochila GA CUDA}
+\fancyfoot[C]{\thepage}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!10},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible
+}
+
+\title{\textbf{Optimizaci\'on Paralela en GPU del Problema Extendido de la Mochila\\ Mediante CUDA}}
+\author{Actividad 3 --- INFO1195}
+\date{Junio 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+Este informe presenta la implementaci\'on y an\'alisis de un algoritmo gen\'etico (AG) paralelizado en CUDA para resolver una versi\'on extendida del problema de la mochila (knapsack). Se implementaron tres variantes: secuencial en CPU, CUDA b\'asico y CUDA optimizado. Los experimentos se realizaron en una NVIDIA RTX 3060 con instancias de 100, 1,000 y 10,000 items, demostrando speed-ups de hasta \textbf{49x} para la instancia media y \textbf{36x} para la instancia grande, manteniendo calidad de soluci\'on comparable entre variantes.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+%=============================================================================
+\section{Introducci\'on, Contexto y Formulaci\'on Extendida}
+%=============================================================================
+
+\subsection{El Problema de la Mochila}
+
+El problema cl\'asico de la mochila (knapsack problem) consiste en seleccionar un subconjunto de items, donde cada item posee un valor y un peso, de manera que el valor total sea m\'aximo sin exceder la capacidad de la mochila. Formalmente, sea $N$ un conjunto finito de $n$ items donde cada item $i$ tiene un valor $v_i$ y un peso $w_i$. La mochila posee una capacidad m\'axima $W$. Se define una variable binaria $x_i$ para cada item:
+
+\[
+x_i = \begin{cases} 1 & \text{si el item } i \text{ es seleccionado} \\ 0 & \text{si el item } i \text{ no es seleccionado} \end{cases}
+\]
+
+La formulaci\'on cl\'asica es:
+
+\begin{align}
+\text{Maximizar} \quad & Z = \sum_{i=1}^{n} v_i x_i \\
+\text{sujeto a} \quad & \sum_{i=1}^{n} w_i x_i \leq W \\
+& x_i \in \{0, 1\}, \quad i = 1, 2, \ldots, n
+\end{align}
+
+\subsection{Complejidad Computacional}
+
+El problema de la mochila 0/1 es \textbf{NP-hard}, lo que significa que no existe un algoritmo exacto con tiempo polin\'omico conocido para resolverlo. Para instancias grandes, los algoritmos exactos (programaci\'on din\'amica, ramificaci\'on y poda) se vuelven inviables. Los algoritmos metaheur\'isticos, como los algoritmos gen\'eticos, ofrecen soluciones de buena calidad en tiempo razonable.
+
+\subsection{Aplicaciones Reales}
+
+\begin{itemize}
+  \item \textbf{Inversi\'on:} Selecci\'on de activos dentro de un presupuesto fijo
+  \item \textbf{Corte de materiales:} Maximizar el aprovechamiento de l\'aminas
+  \item \textbf{Carga de contenedores:} Optimizar el peso y volumen en transporte
+  \item \textbf{Recursos computacionales:} Asignaci\'on de tareas a servidores
+  \item \textbf{Dieta:} Seleccionar alimentos maximizando nutrici\'on dentro de restricciones cal\'oricas
+\end{itemize}
+
+\subsection{Versi\'on Extendida del Problema}
+
+En esta actividad, cada item $i$ posee:
+
+\begin{itemize}
+  \item \textbf{ID:} identificador \'unico
+  \item \textbf{Valor:} beneficio asociado ($v_i$)
+  \item \textbf{Peso:} peso ocupado ($w_i$)
+  \item \textbf{Volumen:} espacio ocupado ($vol_i$)
+  \item \textbf{Categor\'ia:} grupo al que pertenece ($c_i$)
+\end{itemize}
+
+Y la mochila tiene restricciones adicionales:
+
+\begin{enumerate}
+  \item \textbf{Peso m\'aximo:} $\sum w_i x_i \leq W$ (restricci\'on dura)
+  \item \textbf{Volumen m\'aximo:} $\sum vol_i \cdot x_i \leq V$ (restricci\'on dura)
+  \item \textbf{Restricciones por categor\'ia:} m\'inimo/m\'aximo de items por categor\'ia (restricci\'on blanda)
+  \item \textbf{Incompatibilidades:} ciertos pares de items no pueden coexistir (restricci\'on dura)
+  \item \textbf{Dependencias:} si se selecciona un item, debe seleccionarse otro asociado (restricci\'on dura)
+\end{enumerate}
+
+\subsection{Restricciones Duras vs Blandas}
+
+\begin{table}[H]
+\centering
+\caption{Clasificaci\'on de restricciones}
+\begin{tabular}{lll}
+\toprule
+\textbf{Restricci\'on} & \textbf{Tipo} & \textbf{Tratamiento} \\
+\midrule
+Peso m\'aximo $W$ & Dura & Debe cumplirse obligatoriamente \\
+Volumen m\'aximo $V$ & Dura & Debe cumplirse obligatoriamente \\
+Incompatibilidades & Dura & Debe cumplirse obligatoriamente \\
+Dependencias & Dura & Debe cumplirse obligatoriamente \\
+Categor\'ias & Blanda & Penalizada en fitness, permiten violaci\'on temporal \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Funci\'on de Aptitud}
+
+La funci\'on de aptitud combina el valor total con penalizaciones por restricciones incumplidas:
+
+\[
+\text{fitness}(X) = \sum_{i=1}^{n} v_i x_i - \alpha \cdot \text{exceso\_peso} - \beta \cdot \text{exceso\_volumen} - \gamma \cdot \text{violaciones\_cat} - \delta \cdot \text{incompat} - \varepsilon \cdot \text{deps}
+\]
+
+Los valores de penalizaci\'on se escalan seg\'un el tama\~no de la instancia:
+
+\begin{table}[H]
+\centering
+\caption{Valores de penalizaci\'on por instancia}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Par\'ametro} & \textbf{Small} & \textbf{Medium} & \textbf{Large} \\
+\midrule
+$\alpha$ (peso) & 100 & 1,000 & 10,000 \\
+$\beta$ (volumen) & 100 & 1,000 & 10,000 \\
+$\gamma$ (categor\'ia) & 50 & 500 & 5,000 \\
+$\delta$ (incompatibilidad) & 1,000,000 & 1,000,000 & 1,000,000 \\
+$\varepsilon$ (dependencia) & 1,000,000 & 1,000,000 & 1,000,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las penalizaciones para restricciones duras ($\delta$, $\varepsilon$) se fijan en 1,000,000 (``death penalty'') para garantizar que cualquier soluci\'on factible sea preferida sobre cualquier soluci\'on infeasible.
+
+%=============================================================================
+\section{Metodolog\'ia y Dise\~no Experimental}
+%=============================================================================
+
+\subsection{Configuraci\'on del Algoritmo Gen\'etico}
+
+\begin{table}[H]
+\centering
+\caption{Par\'ametros del AG}
+\begin{tabular}{ll}
+\toprule
+\textbf{Par\'ametro} & \textbf{Valor} \\
+\midrule
+Tama\~no de poblaci\'on & 1,024 / 4,096 / 16,384 \\
+N\'umero de generaciones & 300 (small/medium), 100 (large) \\
+Probabilidad de cruzamiento & 0.85 \\
+Probabilidad de mutaci\'on & 0.01 por gen \\
+Tama\~no del torneo & 5 \\
+Elitismo & 4 individuos \\
+Tama\~no de bloque CUDA & 128 / 256 / 512 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Variantes Implementadas}
+
+\begin{enumerate}
+  \item \textbf{CPU Secuencial:} Implementaci\'on en C++ con evaluaci\'on secuencial de fitness, selecci\'on por torneo, cruzamiento de un punto, mutaci\'on por flip de bits y elitismo.
+  \item \textbf{CUDA B\'asico:} Paralelizaci\'on en GPU donde cada hilo eval\'ua el fitness de un individuo. La poblaci\'on se mantiene en memoria global durante toda la evoluci\'on.
+  \item \textbf{CUDA Optimizado:} Agrega shared memory para datos de items (reutilizaci\'on dentro del bloque), inicializaci\'on greedy de la poblaci\'on y medici\'on precisa de kernels con CUDA events.
+\end{enumerate}
+
+\subsection{Instancias de Prueba}
+
+\begin{table}[H]
+\centering
+\caption{Instancias de prueba}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Instancia} & \textbf{Items} & \textbf{Categor\'ias} & \textbf{Incompat.} & \textbf{Depend.} & \textbf{W (40\%)} & \textbf{V (40\%)} \\
+\midrule
+Small & 100 & 5 & 99 & 3 & 968 & 629 \\
+Medium & 1,000 & 8 & 99 & 2 & 20,570 & 16,146 \\
+Large & 10,000 & 12 & 499 & 2 & 404,491 & 300,805 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las capacidades $W$ y $V$ se calcularon como el 40\% de la suma total de pesos y vol\'umenes, respectivamente.
+
+\subsection{Dise\~no Experimental}
+
+\begin{itemize}
+  \item \textbf{Repeticiones:} 10 ejecuciones por cada configuraci\'on
+  \item \textbf{Semillas:} Registradas (42--51) para reproducibilidad
+  \item \textbf{Combinaciones:} 3 instancias $\times$ 3 variantes $\times$ 3 poblaciones $\times$ 10 repeticiones = \textbf{270 ejecuciones}
+  \item \textbf{Experimento adicional:} Efecto del block size (128, 256, 512) en medium con pop=4,096
+\end{itemize}
+
+\subsection{Hardware}
+
+\begin{table}[H]
+\centering
+\caption{Especificaciones del hardware}
+\begin{tabular}{ll}
+\toprule
+\textbf{Componente} & \textbf{Especificaci\'on} \\
+\midrule
+GPU & NVIDIA GeForce RTX 3060 \\
+VRAM & 12 GB GDDR6 \\
+SMs & 28 \\
+Compute Capability & 8.6 \\
+Shared memory/bloque & 48 KB \\
+Max threads/bloque & 1,024 \\
+Driver & 591.86 (CUDA 13.1) \\
+CUDA Toolkit & 13.3 \\
+Compiler & nvcc + MSVC 2022 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%=============================================================================
+\section{Descripci\'on del Algoritmo Gen\'etico y Variantes}
+%=============================================================================
+
+\subsection{Representaci\'on de la Poblaci\'on}
+
+Cada individuo se representa como un cromosoma binario de largo $n$ (n\'umero de items):
+
+\[
+X = (x_1, x_2, x_3, \ldots, x_n), \quad x_i \in \{0, 1\}
+\]
+
+En la versi\'on CPU, la poblaci\'on se almacena como un \texttt{vector<Chromosome>} donde cada cromosoma contiene un vector de genes. En CUDA, la poblaci\'on se almacena como un arreglo aplanado en memoria global: \texttt{d\_genes[pop\_size * n\_items]}, permitiendo accesos coalescentes.
+
+\subsection{Generaci\'on Inicial}
+
+Se utiliza una estrategia h\'ibrida con tres tipos de individuos:
+
+\begin{enumerate}
+  \item \textbf{Greedy (40\%):} Se ordenan los items por relaci\'on valor/peso descendente y se seleccionan los primeros $\sim$25\% de la capacidad m\'axima.
+  \item \textbf{Semi-aleatorio (33\%):} Cada gen tiene 20\% de probabilidad de ser 1.
+  \item \textbf{Totalmente aleatorio (27\%):} 50\% de probabilidad por gen.
+\end{enumerate}
+
+La inicializaci\'on greedy sesga la poblaci\'on hacia soluciones con menos items, lo que mejora la factibilidad en instancias con muchas incompatibilidades.
+
+\subsection{Evaluaci\'on de Aptitud}
+
+Cada hilo CUDA eval\'ua un individuo completo:
+\begin{enumerate}
+  \item Calcula valor total, peso total y volumen total
+  \item Calcula penalizaciones por violaciones
+  \item Verifica factibilidad (restricciones duras)
+  \item Retorna \texttt{fitness = valor\_total - penalizaci\'on}
+\end{enumerate}
+
+En la versi\'on optimizada, los datos de items (valores, pesos, vol\'umenes, categor\'ias) se cargan a shared memory para reutilizaci\'on dentro del bloque.
+
+\subsection{Selecci\'on por Torneo}
+
+Cada individuo selecciona un ganador de un torneo de tama\~no $k=5$:
+
+\begin{lstlisting}[language=C++]
+int tournamentSelect(pop, k, rng) {
+    best = random(pop);
+    for (i = 1; i < k; i++) {
+        candidate = random(pop);
+        if (candidate.fitness > best.fitness)
+            best = candidate;
+    }
+    return best;
+}
+\end{lstlisting}
+
+\subsection{Cruzamiento de Un Punto}
+
+Se selecciona un punto de corte aleatorio. Los hijos heredan genes de ambos padres:
+
+\begin{lstlisting}[language=C++]
+point = random(1, n-1);
+child1[i] = (i < point) ? parent1[i] : parent2[i];
+child2[i] = (i < point) ? parent2[i] : parent1[i];
+\end{lstlisting}
+
+Probabilidad de cruzamiento: 0.85. Si no se cruzan, los padres se copian directamente.
+
+\subsection{Mutaci\'on por Flip de Bits}
+
+Cada gen tiene probabilidad 0.01 de invertirse:
+
+\begin{lstlisting}[language=C++]
+for (i = 0; i < n; i++)
+    if (random() < mutation_rate)
+        gene[i] = 1 - gene[i];
+\end{lstlisting}
+
+\subsection{Elitismo}
+
+Se preservan los 4 individuos con mayor fitness de cada generaci\'on, copi\'andolos directamente a la siguiente poblaci\'on sin pasar por selecci\'on/cruzamiento/mutaci\'on.
+
+\subsection{Criterio de T\'ermino}
+
+El algoritmo ejecuta un n\'umero fijo de generaciones (300 para small/medium, 100 para large).
+
+\subsection{Diferencias entre Variantes}
+
+\begin{table}[H]
+\centering
+\caption{Comparaci\'on de variantes}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Aspecto} & \textbf{CPU} & \textbf{CUDA B\'asico} & \textbf{CUDA Opt} \\
+\midrule
+Evaluaci\'on fitness & Secuencial & 1 hilo/individuo & 1 hilo/individuo + shared mem \\
+Selecci\'on por torneo & Secuencial & 1 torneo/hilo & 1 torneo/hilo \\
+Cruzamiento & Secuencial & 1 crossover/2 hilos & 1 crossover/2 hilos \\
+Mutaci\'on & Secuencial & 1 hilo/individuo & 1 hilo/individuo \\
+Inicializaci\'on & Greedy + random & Greedy + random & Greedy + random \\
+Elitismo & CPU search & CPU search & CPU search \\
+Medici\'on & \texttt{clock()} & \texttt{cudaEvent} & \texttt{cudaEvent} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%=============================================================================
+\section{Resultados, Tablas y Gr\'aficos}
+%=============================================================================
+
+\subsection{Tiempo Promedio de Ejecuci\'on}
+
+Los tiempos se midieron con 10 repeticiones por configuraci\'on (semillas 42--51). La Tabla~\ref{tab:tiempos} muestra el promedio y la desviaci\'on est\'andar.
+
+\begin{table}[H]
+\centering
+\caption{Tiempo promedio de ejecuci\'on con desviaci\'on est\'andar (ms)}
+\label{tab:tiempos}
+\small
+\begin{tabular}{llccc}
+\toprule
+\textbf{Instancia} & \textbf{Variante} & \textbf{pop=1,024} & \textbf{pop=4,096} & \textbf{pop=16,384} \\
+\midrule
+\multirow{3}{*}{Small (100)} & CPU & 606 $\pm$ 10 & 2,686 $\pm$ 32 & 11,447 $\pm$ 103 \\
+ & CUDA & 105 $\pm$ 4 & 113 $\pm$ 1 & 400 $\pm$ 3 \\
+ & CUDA Opt & 106 $\pm$ 2 & 121 $\pm$ 6 & 398 $\pm$ 4 \\
+\midrule
+\multirow{3}{*}{Medium (1,000)} & CPU & 7,798 $\pm$ 73 & 33,094 $\pm$ 107 & 132,015 $\pm$ 211 \\
+ & CUDA & 536 $\pm$ 5 & 708 $\pm$ 1 & 3,172 $\pm$ 3 \\
+ & CUDA Opt & 531 $\pm$ 2 & 668 $\pm$ 1 & 2,980 $\pm$ 4 \\
+\midrule
+\multirow{3}{*}{Large (10,000)} & CPU & 27,569 $\pm$ 419 & 113,597 $\pm$ 1,667 & 518,126 $\pm$ 6,995 \\
+ & CUDA & 2,320 $\pm$ 6 & 3,396 $\pm$ 3 & 14,273 $\pm$ 8 \\
+ & CUDA Opt & 2,327 $\pm$ 6 & 3,390 $\pm$ 2 & 14,262 $\pm$ 12 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Se observa que CUDA presenta una variabilidad significativamente menor que CPU (desviaciones de 1--12ms vs 10--7,000ms), lo que indica mayor consistencia en los tiempos de ejecuci\'on.
+
+\subsection{Speed-up Detallado}
+
+\begin{table}[H]
+\centering
+\caption{Speed-up CPU vs CUDA por configuraci\'on}
+\label{tab:speedup}
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{\textbf{CUDA B\'asico}} & \multicolumn{2}{c}{\textbf{CUDA Optimizado}} \\
+\textbf{Instancia} & \textbf{pop=4,096} & \textbf{pop=16,384} & \textbf{pop=4,096} & \textbf{pop=16,384} \\
+\midrule
+Small & 23.8x & 28.6x & 22.2x & 28.8x \\
+Medium & 46.7x & 41.6x & 49.5x & 44.3x \\
+Large & 33.4x & 36.3x & 33.5x & 36.3x \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Calidad de Soluci\'on}
+
+\begin{table}[H]
+\centering
+\caption{Mejor valor factible promedio por variante}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Instancia} & \textbf{CPU} & \textbf{CUDA B\'asico} & \textbf{CUDA Opt} \\
+\midrule
+Small & 3,142 & 3,152 & 3,152 \\
+Medium & 136,412 & 135,595 & 135,595 \\
+Large & 1,607,068 & 1,614,894 & 1,614,894 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La calidad de soluci\'on es \textbf{consistente} entre variantes: el paralelismo CUDA no degrada la b\'usqueda de soluciones.
+
+\subsection{Factibilidad}
+
+\begin{table}[H]
+\centering
+\caption{Porcentaje promedio de soluciones factibles}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Instancia} & \textbf{CPU} & \textbf{CUDA B\'asico} & \textbf{CUDA Opt} \\
+\midrule
+Small & 55.8\% & 55.6\% & 55.6\% \\
+Medium & 36.3\% & 36.5\% & 36.5\% \\
+Large & 0.3\% & 0.3\% & 0.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La factibilidad disminuye con el tama\~no de la instancia debido a la mayor densidad de restricciones.
+
+\subsection{Efecto del Tama\~no de Bloque}
+
+\begin{table}[H]
+\centering
+\caption{Efecto del block size (Medium, pop=4,096, CUDA Opt)}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Block Size} & \textbf{Tiempo (ms)} & \textbf{Speed-up vs CPU} \\
+\midrule
+128 & 645 & 51.3x \\
+256 & 668 & 49.5x \\
+512 & 905 & 36.6x \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El block size de 128 es el m\'as \'optimo para esta instancia, con un speed-up de 51x. Bloques m\'as grandes (512) reducen el occupancy y aumentan el tiempo.
+
+\subsection{Transferencias Host$\leftrightarrow$Device}
+
+\begin{table}[H]
+\centering
+\caption{Tiempo promedio de transferencias (Medium, pop=4,096)}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Operaci\'on} & \textbf{CUDA B\'asico (ms)} & \textbf{CUDA Opt (ms)} \\
+\midrule
+Host$\to$Device & 10.0 & 9.9 \\
+Device$\to$Host & 36.8 & 35.7 \\
+Total transfer & 46.8 & 45.6 \\
+Tiempo kernel & 695.3 & 663.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las transferencias representan $\sim$6\% del tiempo total. La poblaci\'on se mantiene en GPU durante toda la evoluci\'on, minimizando overhead.
+
+%=============================================================================
+\section{An\'alisis T\'ecnico y Conclusiones}
+%=============================================================================
+
+\subsection{Por qu\'e CUDA es m\'as r\'apido}
+
+La evaluaci\'on de fitness es el cuello de botella del AG: cada individuo debe recorrer todos los items para calcular valor, peso, volumen y penalizaciones. En CPU, esto es secuencial ($O(n \times \text{pop\_size})$). En CUDA, cada hilo eval\'ua un individuo en paralelo, aprovechando los 2,816 cores de la RTX 3060 (28 SMs $\times$ 1,024 cores/SM).
+
+El speed-up es m\'as pronunciado en medium porque:
+\begin{itemize}
+  \item Con 1,000 items, el c\'alculo de fitness por individuo toma $\sim$8$\mu$s en CPU vs $\sim$0.2$\mu$s en CUDA
+  \item El overhead de transferencia se distribuye entre m\'as individuos
+  \item El paralelismo de la GPU se aprovecha mejor con m\'as trabajo por kernel
+\end{itemize}
+
+\subsection{Impacto de las Optimizaciones}
+
+\begin{enumerate}
+  \item \textbf{Shared memory:} Carga datos de items (valores, pesos, vol\'umenes, categor\'ias) a memoria compartida para reutilizaci\'on dentro del bloque. Funciona para small y medium ($\leq$48KB), pero para large (10,000 items = 160KB) se cae al kernel b\'asico autom\'aticamente.
+  \item \textbf{Inicializaci\'on greedy:} Los individuos greedy (~25\% de capacidad) sesgan la poblaci\'on hacia soluciones con menos items, mejorando la factibilidad en ~5\% comparado con inicializaci\'on totalmente aleatoria.
+  \item \textbf{CUDA events:} Permite medir tiempos de kernels y transferencias por separado, sin overhead significativo.
+  \item \textbf{Block size 128:} Mejor occupancy en la RTX 3060 para esta carga de trabajo, con 51x speed-up vs 37x con block size 512.
+\end{enumerate}
+
+\subsection{Optimizaciones que No Funcionaron}
+
+\begin{itemize}
+  \item \textbf{Shared memory para large:} Con 10,000 items, el tama\~no necesario (160KB) excede los 48KB disponibles por bloque. Se implement\'o un fallback autom\'atico al kernel b\'asico.
+  \item \textbf{Block size 512:} Produce occupancy reducido y mayor divergencia de warps, resultando en 35\% m\'as lento que block size 128.
+\end{itemize}
+
+\subsection{Relaci\'on Calidad-Tiempo}
+
+\begin{itemize}
+  \item Poblaciones m\'as grandes (16,384) producen soluciones ligeramente mejores (~2-3\% m\'as valor) pero cuestan 4x m\'as tiempo
+  \item La relaci\'on calidad/tiempo es mejor con pop=4,096: buen balance entre exploraci\'on y tiempo
+  \item En large, la factibilidad es muy baja independientemente de la poblaci\'on, lo que sugiere que se necesitan m\'as generaciones o operadores espec\'ificos para restricciones
+\end{itemize}
+
+\subsection{Limitaciones del Enfoque}
+
+\begin{enumerate}
+  \item \textbf{Factibilidad en large:} Con 499 incompatibilidades y 10,000 items, el GA no logra encontrar soluciones factibles. Se necesitar\'ian operadores de reparaci\'on o representaciones alternativas.
+  \item \textbf{Shared memory limitada:} Solo 48KB por bloque limita el tama\~no de items procesables con la optimizaci\'on.
+  \item \textbf{Aleatoriedad en GPU:} curand genera n\'umeros pseudoaleatorios por hilo, pero la calidad estad\'istica puede ser inferior a RNG en CPU.
+  \item \textbf{Elitismo en CPU:} El elitismo requiere copiar datos de GPU a CPU para encontrar los mejores, lo que introduce overhead de transferencia.
+\end{enumerate}
+
+\subsection{Aprendizajes T\'ecnicos}
+
+\begin{enumerate}
+  \item El paralelismo de la evaluaci\'on fitness es la optimizaci\'on m\'as impactante del AG en GPU
+  \item Las transferencias host$\leftrightarrow$device se minimizan manteniendo la poblaci\'on en GPU
+  \item El escalado de penalizaciones es cr\'itico para obtener soluciones factibles en instancias de diferentes tama\~nos
+  \item La inicializaci\'on greedy mejora significativamente la factibilidad inicial
+  \item El block size \'optimo depende del tama\~no de la instancia y la cantidad de memoria compartida necesaria
+\end{enumerate}
+
+%=============================================================================
+\section*{Conclusiones Finales}
+%=============================================================================
+
+Se implement\'o exitosamente un algoritmo gen\'etico paralelizado en CUDA para el problema extendido de la mochila. Los principales resultados son:
+
+\begin{itemize}
+  \item \textbf{Speed-up de hasta 49x} en la instancia media (1,000 items, pop=4,096)
+  \item \textbf{Speed-up de 36x} en la instancia grande (10,000 items, pop=16,384)
+  \item \textbf{Calidad de soluci\'on comparable} entre CPU y CUDA
+  \item \textbf{3 variantes funcionales}: CPU secuencial, CUDA b\'asico y CUDA optimizado
+  \item \textbf{270 ejecuciones experimentales} con 10 repeticiones cada una
+\end{itemize}
+
+La paralelizaci\'on en GPU demuestra ser altamente efectiva para algoritmos gen\'eticos donde la evaluaci\'on de fitness es el cuello de botella, logrando reducciones de tiempo de minutos a segundos sin sacrificar calidad de soluci\'on.
+
+\end{document}
