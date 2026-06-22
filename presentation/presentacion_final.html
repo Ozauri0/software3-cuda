@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochila GA CUDA — INFO1195</title>
+<script>
+  MathJax = { tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Outfit',system-ui,sans-serif; background:radial-gradient(ellipse at 20% 50%, #0c1018 0%, #06080e 60%, #020408 100%); color:#e2e8f0; overflow:hidden; height:100vh; user-select:none; position:relative; }
+
+/* Background animated particles */
+#bg { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; opacity:0.25; }
+
+.slide { display:none; width:100vw; height:100vh; padding:55px 75px; flex-direction:column; justify-content:center; position:absolute; top:0; left:0; z-index:1; opacity:0; transition:opacity 0.55s cubic-bezier(0.4,0,0.2,1), transform 0.55s cubic-bezier(0.4,0,0.2,1); transform:translateY(35px); }
+.slide.active { display:flex; opacity:1; transform:translateY(0); }
+
+h1 { font-size:3.5em; font-weight:900; margin-bottom:15px; background:linear-gradient(135deg, #64ffda 0%, #00bcd4 40%, #7c4dff 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; letter-spacing:-0.02em; }
+h2 { font-size:2.3em; font-weight:700; margin-bottom:25px; color:#64ffda; letter-spacing:-0.01em; }
+h3 { font-size:1.25em; margin:16px 0 10px; color:#b0bec5; font-weight:500; }
+
+p, li { font-size:1.12em; line-height:1.7; color:#cfd8dc; }
+li { margin-bottom:6px; }
+ul { padding-left:22px; list-style-type:none; }
+ul li::before { content:'▸ '; color:#64ffda; margin-right:6px; }
+
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:start; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:22px; }
+
+.card { background:linear-gradient(145deg, rgba(20,25,38,0.95), rgba(15,18,28,0.98)); border-radius:20px; padding:28px; border:1px solid rgba(100,255,218,0.08); transition:all 0.35s; backdrop-filter:blur(10px); }
+.card:hover { border-color:rgba(100,255,218,0.25); box-shadow:0 0 40px rgba(100,255,218,0.04); transform:translateY(-1px); }
+.card h3 { color:#64ffda; margin-top:0; }
+
+.card-alt { border-color:rgba(124,77,255,0.12); }
+.card-alt h3 { color:#b388ff; }
+.card-alt:hover { border-color:rgba(124,77,255,0.3); box-shadow:0 0 40px rgba(124,77,255,0.06); }
+
+.card-gold { border-color:rgba(255,215,0,0.12); }
+.card-gold h3 { color:#ffd54f; }
+.card-gold:hover { border-color:rgba(255,215,0,0.3); box-shadow:0 0 40px rgba(255,215,0,0.06); }
+
+table { width:100%; border-collapse:separate; border-spacing:0; margin:12px 0; font-size:0.9em; border-radius:12px; overflow:hidden; }
+th { background:linear-gradient(135deg, rgba(20,25,38,0.98), rgba(15,18,28,0.98)); color:#64ffda; padding:12px 16px; text-align:left; border-bottom:1px solid rgba(100,255,218,0.12); font-weight:600; font-size:0.82em; text-transform:uppercase; letter-spacing:0.8px; }
+td { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.03); background:rgba(12,16,24,0.6); }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(100,255,218,0.03); }
+
+.hl { color:#64ffda; font-weight:700; }
+.sp { color:#ffd54f; font-weight:700; font-size:1.06em; }
+.sp-big { color:#ffd54f; font-weight:800; font-size:1.2em; }
+.dim { color:#78909c; font-size:0.85em; }
+
+.big-num { font-size:4em; font-weight:900; background:linear-gradient(135deg,#64ffda,#00bcd4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+.big-num-alt { font-size:4em; font-weight:900; background:linear-gradient(135deg,#b388ff,#7c4dff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+.big-num-gold { font-size:4em; font-weight:900; background:linear-gradient(135deg,#ffd54f,#ff8f00); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+.big-label { font-size:0.9em; color:#546e7a; margin-top:5px; }
+
+.tag { display:inline-block; padding:3px 10px; border-radius:14px; font-size:0.75em; font-weight:600; margin:2px; }
+.tag-t { background:rgba(100,255,218,0.12); color:#64ffda; }
+.tag-p { background:rgba(179,136,255,0.12); color:#b388ff; }
+.tag-r { background:rgba(255,82,82,0.12); color:#ff5252; }
+.tag-y { background:rgba(255,215,0,0.12); color:#ffd54f; }
+.tag-g { background:rgba(0,230,118,0.12); color:#00e676; }
+
+.progress { position:fixed; top:0; left:0; height:2px; background:linear-gradient(90deg,#64ffda,#7c4dff,#ffd54f); transition:width 0.35s; z-index:999; }
+.counter { position:fixed; bottom:25px; right:35px; color:#37474f; font-size:0.82em; z-index:999; font-weight:500; }
+
+.comparison-cols { display:grid; grid-template-columns:1fr 1fr; gap:25px; }
+.col-hdr { text-align:center; font-weight:700; font-size:1.1em; margin-bottom:12px; padding:10px; border-radius:12px; }
+.col-4090 { background:rgba(124,77,255,0.08); color:#b388ff; border:1px solid rgba(124,77,255,0.15); }
+.col-3060 { background:rgba(100,255,218,0.06); color:#64ffda; border:1px solid rgba(100,255,218,0.12); }
+
+code { font-family:'JetBrains Mono','Cascadia Code',monospace; color:#ffd54f; background:rgba(255,215,0,0.06); padding:2px 6px; border-radius:4px; font-size:0.9em; }
+pre { background:rgba(8,10,16,0.9); padding:16px; border-radius:12px; border:1px solid rgba(100,255,218,0.06); font-family:'JetBrains Mono',monospace; font-size:0.78em; line-height:1.55; color:#cfd8dc; overflow:hidden; }
+pre .kw { color:#7c4dff; }
+pre .cm { color:#5c6370; font-style: italic; }
+
+.inline-flow { display:inline-flex; align-items:center; gap:14px; background:rgba(12,16,24,0.8); border:1px solid rgba(255,255,255,0.04); border-radius:16px; padding:18px 28px; }
+.flow-step { padding:8px 16px; border-radius:10px; font-weight:700; font-size:0.88em; }
+.flow-arrow { color:#455a64; font-size:1.2em; }
+
+/* Chart bars */
+.chart-row { display:flex; gap:10px; align-items:flex-end; height:220px; padding:15px 0; }
+.bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; }
+.bar { width:100%; max-width:50px; border-radius:8px 8px 0 0; transition:height 1s cubic-bezier(0.4,0,0.2,1); }
+.bar-4090 { background:linear-gradient(180deg,#b388ff,#651fff); }
+.bar-3060 { background:linear-gradient(180deg,#64ffda,#00bfa5); }
+.bar-label { font-size:0.6em; color:#546e7a; margin-top:4px; text-align:center; line-height:1.3; }
+.bar-val { font-size:0.65em; color:#cfd8dc; margin-bottom:3px; font-weight:600; }
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="progress" id="pg"></div>
+<div class="counter" id="cnt"></div>
+
+<!-- ====== SLIDE 1: Título ====== -->
+<div class="slide active" id="s1">
+  <div style="text-align:center;">
+    <p style="color:#546e7a;font-size:0.95em;letter-spacing:4px;margin-bottom:28px;">INFO1195 · ACTIVIDAD 3 · GRUPO 2</p>
+    <h1 style="font-size:4em;">Optimización Paralela en GPU<br>del Problema Extendido<br>de la Mochila Mediante CUDA</h1>
+    <p style="color:#94a3b8; font-size:1.3em; margin-top:25px; font-weight:400; letter-spacing: 1px;">Christian Ferrer &middot; Sebastian Cisternas &middot; Patricio Valdés &middot; Eliaser Concha &middot; Benjamin Borgeaud</p>
+    <div style="display:flex;justify-content:center;gap:50px;margin-top:55px;">
+      <div class="card" style="text-align:center;min-width:170px;padding:30px 25px;">
+        <div class="big-num-gold">161x</div>
+        <div class="big-label">Speed-up máximo</div>
+        <p class="dim" style="margin-top:4px;">RTX 4090 · pop 16,384</p>
+      </div>
+      <div class="card" style="text-align:center;min-width:170px;padding:30px 25px;">
+        <div class="big-num-alt">2</div>
+        <div class="big-label">GPUs evaluadas</div>
+        <p class="dim" style="margin-top:4px;">RTX 3060 &amp; RTX 4090</p>
+      </div>
+      <div class="card" style="text-align:center;min-width:170px;padding:30px 25px;">
+        <div class="big-num">570</div>
+        <div class="big-label">Experimentos</div>
+        <p class="dim" style="margin-top:4px;">10 repeticiones c/u</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 2: Problema ====== -->
+<div class="slide" id="s2">
+  <h2>El Problema de la Mochila Extendido</h2>
+  <div class="grid2">
+    <div>
+      <h3>Formulación</h3>
+      <div class="card" style="text-align:center;padding:20px 25px;">
+        <p style="font-size:1.2em;">$$\text{Maximizar } Z = \sum_{i=1}^{n} v_i x_i$$</p>
+        <p style="margin:8px 0;">sujeto a</p>
+        <p style="font-size:0.95em;">$$\sum w_i x_i \leq W,\quad \sum vol_i \cdot x_i \leq V$$</p>
+        <p style="margin-top:10px;"><span class="tag tag-r">NP-hard</span> &nbsp;→&nbsp; Algoritmos Genéticos</p>
+      </div>
+      <h3 style="margin-top:20px;">Aplicaciones Reales</h3>
+      <ul>
+        <li>Inversión de activos financieros</li>
+        <li>Corte óptimo de materiales</li>
+        <li>Carga de contenedores logísticos</li>
+        <li>Asignación de recursos computacionales</li>
+      </ul>
+    </div>
+    <div>
+      <h3>5 Restricciones de la Versión Extendida</h3>
+      <div class="card" style="margin-bottom:10px;">
+        <p><span class="tag tag-r">Dura</span> Peso máximo $\ \sum w_i x_i \leq W$</p>
+        <p style="margin-top:8px;"><span class="tag tag-r">Dura</span> Volumen máximo $\ \sum vol_i\,x_i \leq V$</p>
+        <p style="margin-top:8px;"><span class="tag tag-r">Dura</span> Incompatibilidades entre pares de ítems</p>
+        <p style="margin-top:8px;"><span class="tag tag-r">Dura</span> Dependencias obligatorias entre ítems</p>
+        <p style="margin-top:8px;"><span class="tag tag-y">Blanda</span> Categorías (mínimo/máximo por grupo)</p>
+      </div>
+      <h3>Función de Aptitud</h3>
+      <div class="card" style="text-align:center;font-size:1.05em;padding:18px;">
+        <p style="font-size:0.95em;">$$f(X) = \sum v_i x_i - \alpha W - \beta V - \gamma C - \delta I - \varepsilon D$$</p>
+        <p style="margin-top:8px;font-size:0.82em;color:#78909c;">Death penalty: $\delta = \varepsilon = 1{,}000{,}000$ para restricciones duras</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 3: Variantes ====== -->
+<div class="slide" id="s3">
+  <h2>3 Variantes del Algoritmo Genético</h2>
+  <div class="grid3">
+    <div class="card">
+      <h3>🖥️ CPU Secuencial</h3>
+      <p class="dim" style="margin-bottom:12px;">Baseline en C++ puro</p>
+      <ul>
+        <li>Selección por torneo ($k=5$)</li>
+        <li>Cruzamiento de un punto (85%)</li>
+        <li>Mutación flip bits (1%)</li>
+        <li>Elitismo top-4</li>
+        <li>Inicialización greedy híbrida</li>
+      </ul>
+      <p style="margin-top:12px;"><span class="tag tag-y">Referencia</span></p>
+    </div>
+    <div class="card card-alt">
+      <h3>⚡ CUDA Básico</h3>
+      <p class="dim" style="margin-bottom:12px;">1 hilo GPU por individuo</p>
+      <ul>
+        <li>Población en memoria global</li>
+        <li>Kernel fitness paralelo</li>
+        <li><code>curand</code> por hilo</li>
+        <li>Selección + crossover + mutación GPU</li>
+        <li>Transferencia solo inicio/fin</li>
+      </ul>
+      <p style="margin-top:12px;"><span class="tag tag-p">Paralelización directa</span></p>
+    </div>
+    <div class="card card-gold">
+      <h3>🚀 CUDA Optimizado</h3>
+      <p class="dim" style="margin-bottom:12px;">Optimizaciones GPU adicionales</p>
+      <ul>
+        <li>Shared memory para items</li>
+        <li>Accesos coalescentes</li>
+        <li>CUDA events para medición</li>
+        <li>Fallback automático ($\ge$10K items)</li>
+        <li>5–10% más rápido que básico</li>
+      </ul>
+      <p style="margin-top:12px;"><span class="tag tag-g">Mejor rendimiento</span></p>
+    </div>
+  </div>
+  <div style="margin-top:25px;text-align:center;">
+    <div class="inline-flow">
+      <span class="flow-step" style="background:rgba(255,215,0,0.1);color:#ffd54f;">CPU genera</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:rgba(100,255,218,0.08);color:#64ffda;">GPU procesa</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:rgba(124,77,255,0.08);color:#b388ff;">GPU evoluciona</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step" style="background:rgba(0,230,118,0.08);color:#00e676;">CPU recibe</span>
+    </div>
+    <p class="dim" style="margin-top:12px;">La población permanece en GPU durante toda la evolución</p>
+  </div>
+</div>
+
+<!-- ====== SLIDE 4: Instancias + Hardware ====== -->
+<div class="slide" id="s4">
+  <h2>Instancias de Prueba y Hardware</h2>
+  <h3 style="margin-bottom:12px;">Instancias Generadas</h3>
+  <table>
+    <tr><th>Instancia</th><th>Ítems</th><th>Categorías</th><th>Incomp.</th><th>Depend.</th><th>W (40%)</th><th>V (40%)</th></tr>
+    <tr><td><span class="tag tag-g">Small</span></td><td>100</td><td>5</td><td>99</td><td>3</td><td>968</td><td>629</td></tr>
+    <tr><td><span class="tag tag-t">Medium</span></td><td>1,000</td><td>8</td><td>99</td><td>2</td><td>20,570</td><td>16,146</td></tr>
+    <tr><td><span class="tag tag-y">Large</span></td><td>10,000</td><td>12</td><td>499</td><td>2</td><td>404,491</td><td>300,805</td></tr>
+  </table>
+  <div class="grid2" style="margin-top:22px;">
+    <div class="card card-alt">
+      <h3>🖥️ RTX 4090</h3>
+      <table>
+        <tr><td>CPU</td><td class="hl">i9-14900KF</td><td>24C/32T</td></tr>
+        <tr><td>RAM</td><td class="hl">125 GB</td><td>DDR5</td></tr>
+        <tr><td>VRAM</td><td class="hl">24 GB</td><td>GDDR6X</td></tr>
+        <tr><td>CUDA Cores</td><td class="sp-big">16,384</td><td></td></tr>
+        <tr><td>SMs</td><td>128</td><td></td></tr>
+        <tr><td>Compute</td><td>8.9</td><td></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>🖥️ RTX 3060</h3>
+      <table>
+        <tr><td>CPU</td><td class="hl">Ryzen 5 5600X</td><td>6C/12T</td></tr>
+        <tr><td>RAM</td><td class="hl">32 GB</td><td>DDR4</td></tr>
+        <tr><td>VRAM</td><td class="hl">12 GB</td><td>GDDR6</td></tr>
+        <tr><td>CUDA Cores</td><td>3,584</td><td></td></tr>
+        <tr><td>SMs</td><td>28</td><td></td></tr>
+        <tr><td>Compute</td><td>8.6</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 5: Resultados RTX 4090 ====== -->
+<div class="slide" id="s5">
+  <h2>Resultados — RTX 4090 &nbsp;<span style="font-size:0.5em;color:#b388ff;">i9-14900KF · 125GB DDR5 · 24GB VRAM</span></h2>
+  <h3>Small (100 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>387 ± 2</td><td>63</td><td>65 ± 0</td><td class="sp">6.0x</td><td>55.4%</td></tr>
+    <tr><td>4,096</td><td>1,626 ± 12</td><td>70</td><td>73 ± 1</td><td class="sp">22.4x</td><td>55.7%</td></tr>
+    <tr><td>16,384</td><td>6,813 ± 53</td><td>100</td><td>101 ± 1</td><td class="sp-big">67.6x</td><td>56.2%</td></tr>
+  </table>
+  <h3 style="margin-top:18px;">Medium (1,000 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>3,497 ± 18</td><td>311</td><td>309 ± 0</td><td class="sp">11.3x</td><td>36.7%</td></tr>
+    <tr><td>4,096</td><td>15,186 ± 49</td><td>328</td><td>326 ± 0</td><td class="sp">46.6x</td><td>36.6%</td></tr>
+    <tr><td>16,384</td><td>62,574 ± 192</td><td>397</td><td>388 ± 0</td><td class="sp-big" style="font-size:1.4em;">161.1x</td><td>35.5%</td></tr>
+  </table>
+  <h3 style="margin-top:18px;">Large (10,000 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>19,846 ± 335</td><td>1,478</td><td>1,474 ± 1</td><td class="sp">13.5x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.9%</span></td></tr>
+    <tr><td>4,096</td><td>79,994 ± 1,292</td><td>1,994</td><td>1,994 ± 1</td><td class="sp">40.1x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.3%</span></td></tr>
+    <tr><td>16,384</td><td>328,125 ± 4,125</td><td>4,685</td><td>4,684 ± 2</td><td class="sp-big">70.1x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.1%</span></td></tr>
+  </table>
+</div>
+
+<!-- ====== SLIDE 6: Resultados RTX 3060 ====== -->
+<div class="slide" id="s6">
+  <h2>Resultados — RTX 3060 &nbsp;<span style="font-size:0.5em;color:#64ffda;">Ryzen 5 5600X · 32GB DDR4 · 12GB VRAM</span></h2>
+  <h3>Small (100 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>606 ± 10</td><td>105</td><td>106 ± 2</td><td class="sp">5.7x</td><td>55.4%</td></tr>
+    <tr><td>4,096</td><td>2,686 ± 32</td><td>113</td><td>121 ± 6</td><td class="sp">22.2x</td><td>55.7%</td></tr>
+    <tr><td>16,384</td><td>11,447 ± 103</td><td>400</td><td>398 ± 3</td><td class="sp">28.7x</td><td>56.2%</td></tr>
+  </table>
+  <h3 style="margin-top:18px;">Medium (1,000 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>7,798 ± 73</td><td>536</td><td>531 ± 1</td><td class="sp">14.7x</td><td>36.7%</td></tr>
+    <tr><td>4,096</td><td>33,094 ± 107</td><td>708</td><td>668 ± 1</td><td class="sp-big">49.6x</td><td>36.6%</td></tr>
+    <tr><td>16,384</td><td>132,015 ± 211</td><td>3,172</td><td>2,980 ± 4</td><td class="sp">44.3x</td><td>35.5%</td></tr>
+  </table>
+  <h3 style="margin-top:18px;">Large (10,000 ítems)</h3>
+  <table>
+    <tr><th>Pob.</th><th>CPU (ms)</th><th>CUDA (ms)</th><th>CUDA Opt (ms)</th><th>Speed-up</th><th>Factible</th></tr>
+    <tr><td>1,024</td><td>27,569 ± 419</td><td>2,320</td><td>2,327 ± 6</td><td class="sp">11.8x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.9%</span></td></tr>
+    <tr><td>4,096</td><td>113,597 ± 1,667</td><td>3,396</td><td>3,390 ± 2</td><td class="sp-big">33.5x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.3%</span></td></tr>
+    <tr><td>16,384</td><td>518,126 ± 6,995</td><td>14,273</td><td>14,262 ± 12</td><td class="sp">36.3x</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.1%</span></td></tr>
+  </table>
+</div>
+
+<!-- ====== SLIDE 7: Comparativa ====== -->
+<div class="slide" id="s7">
+  <h2>Comparativa Directa — CUDA Optimizado</h2>
+  <div class="comparison-cols">
+    <div>
+      <div class="col-hdr col-4090">RTX 4090 · 16,384 cores</div>
+      <table>
+        <tr><th>Instancia</th><th>Pop</th><th>Tiempo</th><th>Speed-up</th></tr>
+        <tr><td>Small</td><td>4,096</td><td class="hl">73 ± 1 ms</td><td class="sp">22x</td></tr>
+        <tr><td>Medium</td><td>4,096</td><td class="hl">326 ± 0 ms</td><td class="sp">47x</td></tr>
+        <tr><td>Medium</td><td>16,384</td><td class="hl">388 ± 0 ms</td><td class="sp-big">161x</td></tr>
+        <tr><td>Large</td><td>4,096</td><td class="hl">1,994 ± 1 ms</td><td class="sp">40x</td></tr>
+        <tr><td>Large</td><td>16,384</td><td class="hl">4,684 ± 2 ms</td><td class="sp-big">70x</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="col-hdr col-3060">RTX 3060 · 3,584 cores</div>
+      <table>
+        <tr><th>Instancia</th><th>Pop</th><th>Tiempo</th><th>Speed-up</th></tr>
+        <tr><td>Small</td><td>4,096</td><td class="hl">121 ± 6 ms</td><td class="sp">22x</td></tr>
+        <tr><td>Medium</td><td>4,096</td><td class="hl">668 ± 1 ms</td><td class="sp-big">49.6x</td></tr>
+        <tr><td>Medium</td><td>16,384</td><td class="hl">2,980 ± 4 ms</td><td class="sp">44x</td></tr>
+        <tr><td>Large</td><td>4,096</td><td class="hl">3,390 ± 2 ms</td><td class="sp">34x</td></tr>
+        <tr><td>Large</td><td>16,384</td><td class="hl">14,262 ± 12 ms</td><td class="sp">36x</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="card" style="margin-top:22px;text-align:center;padding:18px 25px;">
+    <h3 style="color:#ffd54f;">¿Cuánto más rápida es la RTX 4090?</h3>
+    <div style="display:flex;justify-content:center;gap:40px;margin-top:12px;">
+      <div style="text-align:center;"><p class="dim">Pop 4,096</p><div class="big-num" style="font-size:2.4em;">1.7×</div></div>
+      <div style="text-align:center;"><p class="dim">Pop 16,384</p><div class="big-num-gold" style="font-size:2.4em;">7.7×</div></div>
+      <div style="text-align:center;"><p class="dim">CPU 4090 vs 3060</p><div class="big-num-alt" style="font-size:2.4em;">2.2×</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 8: Speed-up Visual ====== -->
+<div class="slide" id="s8">
+  <h2>Tendencia del Speed-up — Medium (1,000 ítems)</h2>
+  <h3 style="margin-bottom:8px;">CUDA Optimizado por población y GPU</h3>
+  <div class="chart-row">
+    <div class="bar-wrap"><div class="bar-val">11.3x</div><div class="bar bar-4090" style="height:15px;"></div><div class="bar-label">4090<br>pop=1024</div></div>
+    <div class="bar-wrap"><div class="bar-val">46.6x</div><div class="bar bar-4090" style="height:64px;"></div><div class="bar-label">4090<br>pop=4096</div></div>
+    <div class="bar-wrap"><div class="bar-val" style="color:#ffd54f;font-size:0.72em;">161.1x</div><div class="bar bar-4090" style="height:220px;"></div><div class="bar-label">4090<br>pop=16384</div></div>
+    <div class="bar-wrap"><div class="bar-val">14.7x</div><div class="bar bar-3060" style="height:20px;"></div><div class="bar-label">3060<br>pop=1024</div></div>
+    <div class="bar-wrap"><div class="bar-val">49.6x</div><div class="bar bar-3060" style="height:68px;"></div><div class="bar-label">3060<br>pop=4096</div></div>
+    <div class="bar-wrap"><div class="bar-val">44.3x</div><div class="bar bar-3060" style="height:60px;"></div><div class="bar-label">3060<br>pop=16384</div></div>
+  </div>
+  <div class="card" style="margin-top:15px;">
+    <h3>📈 Observaciones</h3>
+    <ul>
+      <li>La <strong>RTX 4090 escala mejor</strong> con poblaciones grandes gracias a sus 16,384 cores</li>
+      <li>En la RTX 3060, el speed-up se <strong>estabiliza en ~45x</strong> (límite de 3,584 cores)</li>
+      <li>Pop=16,384 satura completamente la 4090 → <strong>161x speed-up</strong></li>
+      <li>El i9-14900KF también ayuda: CPU 2.2× más rápida que el Ryzen 5 5600X</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====== SLIDE 9: Calidad ====== -->
+<div class="slide" id="s9">
+  <h2>Calidad de Solución y Factibilidad</h2>
+  <div class="grid2">
+    <div>
+      <h3>Valor promedio encontrado</h3>
+      <table>
+        <tr><th>Instancia</th><th>CPU</th><th>CUDA</th><th>CUDA Opt</th></tr>
+        <tr><td>Small</td><td>3,147</td><td>3,166</td><td class="hl">3,166</td></tr>
+        <tr><td>Medium</td><td>136,235</td><td>136,073</td><td class="hl">136,073</td></tr>
+        <tr><td>Large</td><td>1,609,922</td><td>1,631,447</td><td class="hl">1,631,447</td></tr>
+      </table>
+      <p class="dim" style="margin-top:8px;">✅ Calidad <strong>consistente</strong> entre CPU y CUDA</p>
+      <p class="dim">✅ El paralelismo <strong>no degrada</strong> la búsqueda</p>
+      
+      <h3 style="margin-top:20px;">% Soluciones Factibles</h3>
+      <table>
+        <tr><th>Instancia</th><th>Small</th><th>Medium</th><th>Large</th></tr>
+        <tr><td>CPU</td><td class="hl">55.8%</td><td class="hl">36.3%</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.4%</span></td></tr>
+        <tr><td>CUDA</td><td>55.8%</td><td>36.3%</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.4%</span></td></tr>
+        <tr><td>CUDA Opt</td><td>55.8%</td><td>36.3%</td><td><span style="color:#ef4444; font-weight:bold; text-shadow: 0 0 8px rgba(239,68,68,0.4);">0.4%</span></td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card card-gold" style="margin-bottom:20px;">
+        <h3>Efecto del Block Size</h3>
+        <p class="dim" style="margin-bottom:10px;">Medium · pop=4,096 · RTX 3060</p>
+        <table>
+          <tr><th>Block</th><th>128</th><th>256</th><th>512</th></tr>
+          <tr><td>Tiempo</td><td class="hl">645 ms</td><td>669 ms</td><td>905 ms</td></tr>
+          <tr><td>Speed-up</td><td class="sp">51.3x</td><td>49.5x</td><td>36.6x</td></tr>
+        </table>
+        <p class="dim" style="margin-top:6px;">Block 128 → mejor occupancy para esta carga</p>
+      </div>
+      <div class="card card-alt">
+        <h3>Transferencias Host ↔ Device</h3>
+        <table>
+          <tr><th>Op.</th><th>Básico</th><th>Opt.</th></tr>
+          <tr><td>H→D</td><td>1.8 ms</td><td>1.8 ms</td></tr>
+          <tr><td>D→H</td><td>3.4 ms</td><td>3.3 ms</td></tr>
+          <tr><td>Total</td><td class="hl">5.2 ms</td><td class="hl">5.1 ms</td></tr>
+        </table>
+        <p class="dim" style="margin-top:6px;">Solo ~0.7% del tiempo total</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 10: Código ====== -->
+<div class="slide" id="s10">
+  <h2>Fragmentos de Código CUDA</h2>
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3>Kernel Fitness (Básico)</h3>
+        <pre><span class="kw">__global__</span> <span class="type">void</span> <span class="fn">kernelFitnessBasic</span>(
+    <span class="type">int</span>* d_fitness, ..., <span class="type">int</span> n_items) {
+
+  <span class="type">int</span> idx = blockIdx.x * blockDim.x
+            + threadIdx.x;
+  <span class="kw">if</span> (idx >= pop_size) <span class="kw">return</span>;
+
+  <span class="type">int</span> valor=0, peso=0, vol=0;
+  <span class="kw">for</span> (<span class="type">int</span> i = 0; i < n_items; i++) {
+    <span class="kw">if</span> (d_genes[idx*n_items + i]) {
+      valor += d_item_valores[i];
+      peso  += d_item_pesos[i];
+      vol   += d_item_volumenes[i];
+    }
+  }
+  <span class="cm">// Penalizaciones y factibilidad...</span>
+  d_fitness[idx] = valor - penalizacion;
+}</pre>
+        <p class="dim" style="margin-top:8px;">1 hilo por individuo. Acceso coalescente a memoria global.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card card-alt">
+        <h3>Kernel Fitness (Opt — Shared Memory)</h3>
+        <pre><span class="kw">__global__</span> <span class="type">void</span> kernelFitnessOptimized(
+    ..., <span class="type">int</span> n_items, ...) {
+
+  <span class="kw">extern</span> <span class="kw">__shared__</span> <span class="type">int</span> shared_mem[];
+  <span class="type">int</span>* s_valores = shared_mem;
+  <span class="type">int</span>* s_pesos = shared_mem + n_items;
+
+  <span class="cm">// Carga coalescente a shared mem</span>
+  <span class="kw">for</span> (<span class="type">int</span> i = threadIdx.x;
+       i < n_items; i += blockDim.x) {
+    s_valores[i] = d_item_valores[i];
+    s_pesos[i] = d_item_pesos[i];
+  }
+  __syncthreads();
+
+  <span class="cm">// Fitness usando shared memory</span>
+  <span class="kw">for</span> (<span class="type">int</span> i = 0; i < n_items; i++) {
+    <span class="kw">if</span> (my_genes[i])
+      valor += s_valores[i];
+  }
+}</pre>
+        <p class="dim" style="margin-top:8px;">Shared memory para reutilización. Fallback automático si >48KB.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== SLIDE 11: Análisis ====== -->
+<div class="slide" id="s11">
+  <h2>Análisis Técnico</h2>
+  <div class="grid3">
+    <div class="card card-gold">
+      <h3>✅ Qué Funcionó</h3>
+      <ul>
+        <li>Shared memory (5–10% mejora)</li>
+        <li>Inicialización greedy (+5% factibilidad)</li>
+        <li>Block size 128 (mejor occupancy)</li>
+        <li>Población en GPU (minimiza transfers)</li>
+        <li>CUDA events (medición sin overhead)</li>
+        <li>Fallback automático para large</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:rgba(255,82,82,0.15);">
+      <h3 style="color:#ff5252;">❌ Limitaciones</h3>
+      <ul>
+        <li>Shared mem en large (160KB > 48KB)</li>
+        <li>Block size 512 (35% más lento)</li>
+        <li>Factibilidad baja en large (0.3%)</li>
+        <li>Elitismo requiere transfer CPU</li>
+        <li>Curand calidad inferior a RNG CPU</li>
+      </ul>
+    </div>
+    <div class="card card-alt">
+      <h3>📊 Calidad vs Tiempo</h3>
+      <ul>
+        <li>Pop=1,024: rápido, calidad base</li>
+        <li>Pop=4,096: <strong>óptimo</strong> balance</li>
+        <li>Pop=16,384: +3–5% calidad, 4× tiempo</li>
+        <li>Más generaciones > más población</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="margin-top:22px;text-align:center;padding:20px;">
+    <h3>¿Por qué CUDA es más rápido?</h3>
+    <div style="display:flex;align-items:center;gap:35px;justify-content:center;padding:10px;">
+      <div style="text-align:center;"><p class="dim">CPU (1 core)</p><div class="big-num" style="font-size:2.2em;">1</div><p class="dim" style="font-size:0.75em;">secuencial</p></div>
+      <div style="color:#455a64;font-size:1.4em;">vs</div>
+      <div style="text-align:center;"><p class="dim">RTX 3060</p><div class="big-num-alt" style="font-size:2.2em;">3,584</div><p class="dim" style="font-size:0.75em;">cores</p></div>
+      <div style="color:#455a64;font-size:1.4em;">vs</div>
+      <div style="text-align:center;"><p class="dim">RTX 4090</p><div class="big-num-gold" style="font-size:2.2em;">16,384</div><p class="dim" style="font-size:0.75em;">cores</p></div>
+    </div>
+    <p class="dim" style="margin-top:10px;">La evaluación de fitness de cada individuo es independiente → paralelizable al 100%</p>
+  </div>
+</div>
+
+<!-- ====== SLIDE 12: Conclusiones ====== -->
+<div class="slide" id="s12">
+  <h2>Conclusiones</h2>
+  <div class="grid2">
+    <div>
+      <div class="card card-gold" style="margin-bottom:18px;">
+        <h3 style="color:#ffd54f;">🏆 Logros Principales</h3>
+        <ul>
+          <li><strong>161× speed-up</strong> en RTX 4090 (medium, pop=16,384)</li>
+          <li><strong>49× speed-up</strong> en RTX 3060 (medium, pop=4,096)</li>
+          <li><strong>3 variantes funcionales</strong> validadas en 2 GPUs</li>
+          <li><strong>Más de 270 ejecuciones base</strong> con desviación estándar</li>
+          <li>Calidad de solución <strong>idéntica</strong> entre CPU y GPU</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📚 Aprendizajes</h3>
+        <ul>
+          <li>Paralelizar fitness es la optimización más impactante</li>
+          <li>Shared memory efectiva con < 3,000 ítems</li>
+          <li>El speed-up escala con el tamaño de población</li>
+          <li>Death penalty necesaria para restricciones duras</li>
+          <li>Block size 128 óptimo para RTX 3060</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="text-align:center;padding:35px;">
+        <p style="font-size:2.4em;font-weight:800;background:linear-gradient(135deg,#64ffda,#7c4dff,#ffd54f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">¡Gracias!</p>
+        <p style="margin-top:8px;color:#78909c;font-size:1em;">¿Preguntas?</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Canvas particle background =====
+const canvas=document.getElementById('bg');
+const ctx=canvas.getContext('2d');
+let w,h,particles=[];
+function resize(){w=canvas.width=window.innerWidth;h=canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+for(let i=0;i<45;i++) particles.push({x:Math.random()*w,y:Math.random()*h,r:0.5+Math.random()*1.2,vx:(Math.random()-0.5)*0.25,vy:(Math.random()-0.5)*0.25,o:0.12+Math.random()*0.25});
+function animate(){
+  ctx.clearRect(0,0,w,h);
+  for(let p of particles){
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0)p.x=w;if(p.x>w)p.x=0;if(p.y<0)p.y=h;if(p.y>h)p.y=0;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(100,255,218,${p.o})`;ctx.fill();
+    // Connections
+    for(let q of particles){if(q===p)continue;const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<150){ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.strokeStyle=`rgba(124,77,255,${0.03*(1-d/150)})`;ctx.stroke();}}
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+// ===== Slide navigation =====
+const N=12;let cur=1;
+function show(n){
+  document.querySelectorAll('.slide').forEach(s=>{s.classList.remove('active');s.style.display='none';});
+  const s=document.getElementById('s'+n);
+  s.style.display='flex';requestAnimationFrame(()=>s.classList.add('active'));
+  document.getElementById('pg').style.width=(n/N*100)+'%';
+  document.getElementById('cnt').textContent=n+' / '+N;cur=n;
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='ArrowDown'){e.preventDefault();if(cur<N){cur++;show(cur);}}
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();if(cur>1){cur--;show(cur);}}
+  if(e.key==='Home'){e.preventDefault();cur=1;show(cur);}
+  if(e.key==='End'){e.preventDefault();cur=N;show(cur);}
+  if(e.key==='f'||e.key==='F'){e.preventDefault();if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+});
+let tX=0;document.addEventListener('touchstart',e=>{tX=e.touches[0].clientX;});
+document.addEventListener('touchend',e=>{const d=tX-e.changedTouches[0].clientX;if(Math.abs(d)>50){d>0?(cur<N&&show(++cur)):(cur>1&&show(--cur));}});
+show(1);
+</script>
+
+</body>
+
+</html>

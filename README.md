@@ -30,8 +30,14 @@ CUDA_BIN="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin"
 MSVC_BIN="/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64"
 export PATH="$CUDA_BIN:$MSVC_BIN:$PATH"
 
-# Compilar con -arch=sm_86 (requerido por driver 591.86)
-nvcc -O3 -std=c++17 -arch=sm_86 \
+# Compilar con soporte para m\'ultiples arquitecturas GPU
+nvcc -O3 -std=c++17 \
+  -gencode arch=compute_50,code=sm_50 \
+  -gencode arch=compute_60,code=sm_60 \
+  -gencode arch=compute_70,code=sm_70 \
+  -gencode arch=compute_75,code=sm_75 \
+  -gencode arch=compute_80,code=sm_80 \
+  -gencode arch=compute_86,code=sm_86 \
   -I"/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/include" \
   -o mochila_ga_cuda \
   src/main.cu src/instance_loader.cpp src/genetic_algorithm_cpu.cpp \

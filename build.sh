@@ -50,7 +50,7 @@ echo "$CPP_FILES"
 echo ""
 
 # Build nvcc command with all include paths
-nvcc -O3 -std=c++17 -arch=sm_86 \
+nvcc -O3 -std=c++17 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_86,code=sm_86 -gencode arch=compute_89,code=sm_89 -gencode arch=compute_90,code=sm_90 \
   -I"$CUDA_INC" \
   -I"$MSVC_INC" \
   -I"$SDK_INC_UM" \

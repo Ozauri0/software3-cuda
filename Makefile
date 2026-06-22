@@ -26,7 +26,7 @@ SDK_LIB_UM = $(SDK_BASE)/Lib/$(SDK_VER)/um/x64
 SDK_LIB_UCRT = $(SDK_BASE)/Lib/$(SDK_VER)/ucrt/x64
 
 # Flags
-NVCC_FLAGS = -O3 -std=c++17 -arch=sm_86
+NVCC_FLAGS = -O3 -std=c++17 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_86,code=sm_86 -gencode arch=compute_89,code=sm_89 -gencode arch=compute_90,code=sm_90
 INCLUDES = -I$(CUDA_INC) -I$(MSVC_INC) -I$(SDK_INC_UM) -I$(SDK_INC_UCRT) -I$(SDK_INC_SHARED) -Isrc
 LIBS = -L$(CUDA_LIB) -L$(MSVC_LIB) -L$(SDK_LIB_UM) -L$(SDK_LIB_UCRT)
 
